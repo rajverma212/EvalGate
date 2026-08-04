@@ -1,4 +1,4 @@
-# Deploying the Evaluation OS to Vercel
+# Deploying EvalGate to Vercel
 
 The app is **live on Vercel** as two projects from this one GitHub repo, both
 auto-redeploying on every `git push` to `main`:

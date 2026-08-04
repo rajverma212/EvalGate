@@ -84,7 +84,7 @@ model-regression-detector/
 ├── data/
 │   └── eval.db                     # SQLite system of record (git-ignored)
 │
-├── web/                            # Next.js frontend — the "Evaluation OS" product UI
+├── web/                            # Next.js frontend — the "EvalGate" product UI
 │   ├── app/                        # App Router (Mission Control, feature workspace, create)
 │   ├── components/                 # Design-system primitives + views
 │   └── lib/api.ts                  # Typed client mirroring src/mrds/api/serializers.py
@@ -700,7 +700,7 @@ Common conventions: machine-readable output (JSON) available for CI parsing, str
 The dashboard is a **read/inspection surface**; mutations (promotion, evaluation) happen through the CLI to keep one authoritative write path. (Baseline promotion *from* the dashboard, if added later, would call the same CLI/repository code path.)
 
 > The Streamlit dashboard is now the **original prototype**. The primary product surface is
-> the **Evaluation OS** web app (`web/`), backed by a thin FastAPI layer (`src/mrds/api/`).
+> the **EvalGate** web app (`web/`), backed by a thin FastAPI layer (`src/mrds/api/`).
 > Both are feature-agnostic presentation layers over the same read-only data seam; the API
 > additionally exposes guarded baseline promotion (via `BaselinePromoter`, same write path)
 > and **end-to-end feature activation** (`POST /api/onboarding/activate`), which orchestrates

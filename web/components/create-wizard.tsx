@@ -192,7 +192,7 @@ export function CreateWizard() {
         {step === 1 && (
           <Panel
             title="Bring your golden dataset"
-            sub="Labeled examples are the ground truth. Eval OS infers the schema from them."
+            sub="Labeled examples are the ground truth. EvalGate infers the schema from them."
           >
             <div className="mb-3 flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => setText(SAMPLE)}>
@@ -226,7 +226,7 @@ export function CreateWizard() {
         )}
 
         {step === 2 && spec && (
-          <Panel title="Inferred schema" sub="Eval OS read your labels and proposed this contract.">
+          <Panel title="Inferred schema" sub="EvalGate read your labels and proposed this contract.">
             <SchemaReview spec={spec} />
           </Panel>
         )}

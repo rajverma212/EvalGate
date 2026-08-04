@@ -22,7 +22,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Eval OS — AI Evaluation Operating System",
+  title: "EvalGate — AI Evaluation Operating System",
   description:
     "The control plane for the health, quality, and evolution of your AI features. Evaluate against golden datasets, catch regressions, and gate deploys.",
 };

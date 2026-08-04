@@ -1,10 +1,12 @@
-# Model Regression Detection System (MRDS)
+# EvalGate
 
 > **An AI evaluation platform and deployment-safety system for LLM-powered features.**
-> MRDS continuously tests AI features against versioned "golden" datasets, scores them, compares every candidate against a promoted baseline, detects quality **regressions**, generates reports, sends Slack alerts, and **blocks deployments when quality drops** — the same way unit tests and CI block buggy code from shipping.
+> EvalGate continuously tests AI features against versioned "golden" datasets, scores them, compares every candidate against a promoted baseline, detects quality **regressions**, generates reports, sends Slack alerts, and **blocks deployments when quality drops** — the same way unit tests and CI block buggy code from shipping.
+>
+> <sub>Formerly the Model Regression Detection System (MRDS) — the underlying Python package (`mrds`) and CLI (`mrds`) keep that name internally.</sub>
 
-> **🛰️ New: the Evaluation OS web app.** The primary product surface is now a premium
-> Next.js frontend (`web/`) backed by a thin HTTP API (`src/mrds/api/`) over the unchanged
+> **🛰️ The EvalGate web app.** The primary product surface is a premium Next.js
+> frontend (`web/`) backed by a thin HTTP API (`src/mrds/api/`) over the unchanged
 > engine — fleet health, verdict-first run analysis with per-case failure explanations,
 > root-cause drilldowns, and in-UI baseline promotion. See
 > [docs/web-frontend.md](docs/web-frontend.md). The Streamlit dashboard remains as the
@@ -125,7 +127,7 @@ flowchart TD
 - 📝 **Versioned, immutable prompts & datasets** — identified by content hash for full reproducibility.
 - 📄 **Markdown reports** rendered with Jinja2, saved per run and uploaded as CI artifacts.
 - 🔔 **Slack alerting** on regressions and promotions — best-effort and non-blocking.
-- 🖥️ **Evaluation OS web app** *(the primary product surface)* — a premium **Next.js** frontend on **Vercel**, over a feature-agnostic **FastAPI** layer: fleet health, verdict-first run analysis with per-case failure explanations, root-cause drilldowns, trends, run comparison, a dataset explorer, and in-UI baseline promotion. *(The original read-only Streamlit dashboard remains as a prototype.)*
+- 🖥️ **EvalGate web app** *(the primary product surface)* — a premium **Next.js** frontend on **Vercel**, over a feature-agnostic **FastAPI** layer: fleet health, verdict-first run analysis with per-case failure explanations, root-cause drilldowns, trends, run comparison, a dataset explorer, and in-UI baseline promotion. *(The original read-only Streamlit dashboard remains as a prototype.)*
 - 🧰 **Cost-aware by default** — `temperature=0`, deterministic scorers for gating, LLM-as-judge **off in CI**, smoke subsets on PRs and full datasets nightly.
 - ✅ **Fully testable** — the Anthropic API is **always mocked** in tests; metrics and thresholds are pure functions; tests assert exact metrics and exact CLI exit codes.
 
@@ -162,7 +164,7 @@ mrds promote-baseline --run <run-id> --promoted-by you --note "v2 prompt looks g
 
 ---
 
-## 7. The Web App — "Evaluation OS"
+## 7. The Web App — "EvalGate"
 
 The primary surface is a premium **Next.js** app (React + TypeScript + Tailwind, deployed on **Vercel**) backed by a thin, feature-agnostic **FastAPI** layer over the same engine — see [docs/web-frontend.md](docs/web-frontend.md). It's organized as **Mission Control → feature workspace**: a fleet view of every AI feature's health, then a per-feature workspace with the views below. *(The original read-only Streamlit prototype mirrors the same set.)*
 
@@ -259,7 +261,7 @@ src/mrds/
   api/            feature-agnostic HTTP API (FastAPI) backing the web frontend
   dashboard/      Streamlit app + pages (original prototype)
 
-web/              Next.js "Evaluation OS" frontend — the primary product surface (Vercel)
+web/              Next.js "EvalGate" frontend — the primary product surface (Vercel)
 prompts/          versioned prompt YAML        →  prompts/email_classifier/v1.yaml
 datasets/         versioned golden JSON        →  datasets/email_classifier/v1.json
 config/           settings.yaml (committed, non-secret)
@@ -297,7 +299,7 @@ ruff format --check .
 pytest -q
 ```
 
-**Run the Evaluation OS web app** (the primary surface — offline demo data, no API key needed):
+**Run the EvalGate web app** (the primary surface — offline demo data, no API key needed):
 
 ```bash
 python -m mrds.demo            # one-time: seed data/eval.db with a realistic history
@@ -323,7 +325,7 @@ Secrets (`ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL`) come from the environment onl
 
 ## 14. Live App
 
-▶️ **[mrds-web.vercel.app](https://mrds-web.vercel.app)** — the Evaluation OS web app (Next.js + FastAPI, on Vercel).
+▶️ **[mrds-web.vercel.app](https://mrds-web.vercel.app)** — the EvalGate web app (Next.js + FastAPI, on Vercel).
 
 <sub>Original Streamlit prototype (archived): [modelregressiondetector.streamlit.app](https://modelregressiondetector.streamlit.app).</sub>
 

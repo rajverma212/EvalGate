@@ -1,4 +1,4 @@
-# Eval OS — web frontend
+# EvalGate — web frontend
 
 **Live:** https://mrds-web.vercel.app &nbsp;·&nbsp; **API:** https://mrds-api.vercel.app
 

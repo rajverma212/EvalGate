@@ -169,7 +169,7 @@ function EmptyFleet() {
       </span>
       <h3 className="mt-5 font-display text-2xl text-bright">No features under test yet</h3>
       <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-dim">
-        Onboard your first AI feature from a labeled dataset — Eval OS infers the schema,
+        Onboard your first AI feature from a labeled dataset — EvalGate infers the schema,
         scaffolds a prompt, and runs the first evaluation.
       </p>
       <Button asChild variant="signal" className="mt-6">

@@ -34,7 +34,7 @@ export function AppShell({ fleet, children }: { fleet: FleetItem[]; children: Re
             <span className="h-2 w-2 rounded-full bg-signal animate-breathe" style={{ boxShadow: "0 0 8px var(--signal)" }} />
           </span>
           <span className="font-display text-[19px] leading-none text-bright">
-            Eval<span className="text-signal">·</span>OS
+            Eval<span className="text-signal">·</span>Gate
           </span>
         </Link>
 

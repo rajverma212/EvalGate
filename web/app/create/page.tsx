@@ -20,7 +20,7 @@ export default function CreatePage() {
           From dataset to evaluated feature
         </h1>
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-dim">
-          Hand Eval OS a set of labeled examples. It infers the schema, picks scorers, scaffolds a
+          Hand EvalGate a set of labeled examples. It infers the schema, picks scorers, scaffolds a
           prompt, and stands the feature up — no schema files, no scorer code.
         </p>
       </Reveal>

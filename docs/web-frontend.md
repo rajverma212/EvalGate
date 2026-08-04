@@ -1,4 +1,4 @@
-# Web Frontend & HTTP API — the Evaluation OS
+# Web Frontend & HTTP API — EvalGate
 
 > **Status:** Implemented. Adds two presentation layers — `src/mrds/api/` (FastAPI) and
 > `web/` (Next.js) — over the existing, unchanged platform core.
