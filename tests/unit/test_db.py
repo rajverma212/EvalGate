@@ -358,3 +358,90 @@ def test_delete_run_cascades_to_test_results(store: EvaluationStore) -> None:
     with store._db.transaction():
         conn.execute("DELETE FROM runs WHERE id = ?", (run_id,))
     assert conn.execute("SELECT COUNT(*) FROM test_results").fetchone()[0] == 0
+
+
+# -- deleting runs (EvaluationStore.delete_run) ----------------------------------
+
+
+def test_delete_run_removes_run_and_its_test_results(store: EvaluationStore) -> None:
+    store.save_evaluation(_result("run-1"))
+    conn = store._db.connection
+
+    deleted = store.delete_run("run-1")
+    assert deleted.run_uuid == "run-1"
+    assert store.runs.get_by_uuid("run-1") is None
+    assert "email_classifier" not in store.runs.features()  # clean out of Mission Control
+    assert conn.execute("SELECT COUNT(*) FROM test_results").fetchone()[0] == 0
+
+
+def test_delete_unknown_run_raises(store: EvaluationStore) -> None:
+    with pytest.raises(DbError):
+        store.delete_run("nope")
+
+
+def test_delete_non_baseline_run_leaves_feature_and_baseline_intact(
+    store: EvaluationStore,
+) -> None:
+    store.save_evaluation(_result("run-1"))
+    store.save_evaluation(_result("run-2", cat_mean=0.5, pass_rate=0.5))
+    store.promote_baseline("run-1", promoted_by="ci")
+
+    store.delete_run("run-2")
+
+    assert "email_classifier" in store.runs.features()  # run-1 still there
+    active = store.baselines.get_active("email_classifier")
+    assert active is not None and active.run_id == store.runs.get_by_uuid("run-1").id
+
+
+def test_delete_active_baseline_run_is_blocked_without_force(store: EvaluationStore) -> None:
+    store.save_evaluation(_result("run-1"))
+    store.promote_baseline("run-1", promoted_by="ci")
+
+    with pytest.raises(DbError, match="active baseline"):
+        store.delete_run("run-1")
+    assert store.runs.get_by_uuid("run-1") is not None  # untouched
+
+
+def test_delete_active_baseline_run_with_force_clears_the_baseline(
+    store: EvaluationStore,
+) -> None:
+    store.save_evaluation(_result("run-1"))
+    store.promote_baseline("run-1", promoted_by="ci")
+
+    store.delete_run("run-1", force=True)
+
+    assert store.runs.get_by_uuid("run-1") is None
+    assert store.baselines.get_active("email_classifier") is None  # no dangling reference
+    assert "email_classifier" not in store.runs.features()
+
+
+def test_delete_run_removes_its_regressions_both_sides(store: EvaluationStore) -> None:
+    baseline = _result("base-1", cat_mean=0.92, pass_rate=0.92)
+    candidate = _result("cand-1", cat_mean=0.78, pass_rate=0.78)
+    store.save_evaluation(baseline)
+    store.save_evaluation(candidate)
+    regression = RegressionDetector().compare(
+        store.get_evaluation_result("base-1"), store.get_evaluation_result("cand-1")
+    )
+    store.save_regression(regression)
+    cand_id = store.runs.get_by_uuid("cand-1").id
+    assert store.regressions.list_for_run(cand_id)  # sanity: regressions exist
+
+    # Delete the CANDIDATE side: its regressions must go with it.
+    store.delete_run("cand-1")
+    assert store.regressions.list_for_run(cand_id) == []
+
+    # Re-create and this time delete the BASELINE side (baseline_run_id, not cascaded
+    # by the FK) — must not leave a dangling regression row either.
+    store.save_evaluation(_result("cand-2", cat_mean=0.78, pass_rate=0.78))
+    regression2 = RegressionDetector().compare(
+        store.get_evaluation_result("base-1"), store.get_evaluation_result("cand-2")
+    )
+    store.save_regression(regression2)
+    conn = store._db.connection
+    base_id = store.runs.get_by_uuid("base-1").id
+    store.delete_run("base-1")
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM regressions WHERE baseline_run_id = ?", (base_id,)
+    ).fetchone()[0]
+    assert remaining == 0

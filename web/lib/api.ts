@@ -1,11 +1,12 @@
 /**
- * Typed client for the MRDS Evaluation OS API.
+ * Typed client for the EvalGate API.
  *
  * Server components call the backend directly (absolute origin). Client components
  * call the same paths relatively (`/api/...`), proxied by the Next rewrite. The shapes
  * below mirror `src/mrds/api/serializers.py` exactly.
  */
 
+import { cache } from "react";
 import { notFound } from "next/navigation";
 
 const SERVER_ORIGIN = process.env.MRDS_API_URL ?? "http://127.0.0.1:8000";
@@ -310,14 +311,23 @@ async function serverGetOr404<T>(path: string): Promise<T> {
   }
 }
 
-/** Resilient fleet fetch for the shell/home; returns [] if the API is unreachable. */
-export async function getFeatures(): Promise<FeatureOverview[]> {
+/**
+ * Resilient fleet fetch for the shell/home; returns [] if the API is unreachable.
+ *
+ * Wrapped in React's per-request `cache()`: the root layout (sidebar) and the Mission
+ * Control home page both call this on every navigation, and `cache: "no-store"` on the
+ * underlying `fetch` is deliberate (this platform must never show stale regression
+ * health) — so `cache()` here dedupes the two call sites down to one real request
+ * *within a single navigation's render*, not across navigations. Each new request still
+ * fetches fresh; this only removes the redundant duplicate inside one page load.
+ */
+export const getFeatures = cache(async (): Promise<FeatureOverview[]> => {
   try {
     return await serverGet<FeatureOverview[]>("/api/features");
   } catch {
     return [];
   }
-}
+});
 
 export interface ActivationResult {
   feature: string;
@@ -349,6 +359,24 @@ export async function activateFeature(body: ActivateRequest): Promise<Activation
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail ?? "Activation failed.");
   return data as ActivationResult;
+}
+
+export interface DeleteRunResult {
+  deleted: boolean;
+  feature: string;
+  run_uuid?: string;
+  message?: string;
+}
+
+/** Delete a run (Mission Control housekeeping). Pass force to override the
+ * active-baseline guard; check `.deleted` — a blocked delete resolves, not throws. */
+export async function deleteRun(runUuid: string, force = false): Promise<DeleteRunResult> {
+  const res = await fetch(`/api/runs/${runUuid}${force ? "?force=true" : ""}`, {
+    method: "DELETE",
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail ?? "Delete failed.");
+  return data as DeleteRunResult;
 }
 
 export const getFeature = (f: string) => serverGetOr404<FeatureOverview>(`/api/features/${f}`);

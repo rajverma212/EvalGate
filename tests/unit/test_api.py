@@ -163,6 +163,50 @@ def test_promote_with_force_overrides(client: TestClient) -> None:
     assert active["run_uuid"] == run_uuid
 
 
+def test_delete_run_removes_it_from_the_fleet(client: TestClient) -> None:
+    runs_before = client.get("/api/features/ticket_router/runs").json()
+    non_baseline = next(r for r in runs_before if not r["is_baseline"])
+
+    resp = client.delete(f"/api/runs/{non_baseline['run_uuid']}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["deleted"] is True
+    assert body["feature"] == "ticket_router"
+
+    assert client.get(f"/api/runs/{non_baseline['run_uuid']}").status_code == 404
+    runs_after = client.get("/api/features/ticket_router/runs").json()
+    assert non_baseline["run_uuid"] not in {r["run_uuid"] for r in runs_after}
+    assert len(runs_after) == len(runs_before) - 1
+
+
+def test_delete_unknown_run_404s(client: TestClient) -> None:
+    assert client.delete("/api/runs/deadbeef").status_code == 404
+
+
+def test_delete_active_baseline_run_is_blocked_without_force(client: TestClient) -> None:
+    active = client.get("/api/features/ticket_router/baseline").json()["active"]
+    run_uuid = active["run_uuid"]
+
+    resp = client.delete(f"/api/runs/{run_uuid}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["deleted"] is False
+    assert "active baseline" in body["message"]
+
+    assert client.get(f"/api/runs/{run_uuid}").status_code == 200  # untouched
+
+
+def test_delete_active_baseline_run_with_force_succeeds(client: TestClient) -> None:
+    active = client.get("/api/features/ticket_router/baseline").json()["active"]
+    run_uuid = active["run_uuid"]
+
+    resp = client.delete(f"/api/runs/{run_uuid}?force=true")
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] is True
+    assert client.get(f"/api/runs/{run_uuid}").status_code == 404
+    assert client.get("/api/features/ticket_router/baseline").json()["active"] is None
+
+
 def test_onboarding_infers_schema_from_dataset(client: TestClient) -> None:
     resp = client.post(
         "/api/onboarding/infer",

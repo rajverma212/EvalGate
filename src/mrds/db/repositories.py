@@ -264,6 +264,17 @@ class RunRepository:
         ).fetchall()
         return [r["feature_name"] for r in rows]
 
+    def delete(self, run_id: int) -> bool:
+        """Delete a run row. Its ``test_results`` cascade via the foreign key.
+
+        Callers must first clear any ``baselines``/``regressions`` rows referencing
+        ``run_id`` (those foreign keys are not ``ON DELETE CASCADE``, so this would
+        otherwise fail); see :meth:`EvaluationStore.delete_run`. Returns whether a row
+        was actually deleted.
+        """
+        cursor = self._conn.execute("DELETE FROM runs WHERE id = ?", (run_id,))
+        return cursor.rowcount > 0
+
 
 class TestResultRepository:
     """Access to the ``test_results`` table."""
@@ -343,6 +354,15 @@ class BaselineRepository:
         ).fetchall()
         return [BaselineRecord.model_validate(dict(r)) for r in rows]
 
+    def delete_for_run(self, run_id: int) -> int:
+        """Delete every baseline record (active or historical) pointing at ``run_id``.
+
+        ``baselines.run_id`` has no ``ON DELETE CASCADE`` (unlike ``test_results``), so
+        this must run before the run row itself is deleted. Returns the row count removed.
+        """
+        cursor = self._conn.execute("DELETE FROM baselines WHERE run_id = ?", (run_id,))
+        return cursor.rowcount
+
 
 class RegressionRepository:
     """Access to the ``regressions`` table."""
@@ -388,3 +408,13 @@ class RegressionRepository:
             "SELECT * FROM regressions WHERE run_id = ? ORDER BY id", (run_id,)
         ).fetchall()
         return [RegressionRecord.model_validate(dict(r)) for r in rows]
+
+    def delete_for_run(self, run_id: int) -> int:
+        """Delete regressions where ``run_id`` is either the candidate or the baseline
+        side. ``run_id`` cascades on run deletion but ``baseline_run_id`` does not, so
+        this must run before the run row itself is deleted. Returns the row count removed.
+        """
+        cursor = self._conn.execute(
+            "DELETE FROM regressions WHERE run_id = ? OR baseline_run_id = ?", (run_id, run_id)
+        )
+        return cursor.rowcount

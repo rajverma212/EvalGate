@@ -43,6 +43,7 @@ from mrds.dashboard.data import (
     cases_for_metric,
     perfect_run_recommendations,
 )
+from mrds.db.errors import DbError
 from mrds.db.records import BaselineRecord
 from mrds.evaluation.models import AggregateMetrics
 from mrds.llm.base import StructuredLLMClient
@@ -75,7 +76,7 @@ def get_llm_client() -> StructuredLLMClient | None:
 def create_app() -> FastAPI:
     """Build the FastAPI application (factory; used by ``__main__`` and tests)."""
     app = FastAPI(
-        title="MRDS Evaluation OS API",
+        title="EvalGate API",
         version="1.0.0",
         summary="HTTP surface for the AI evaluation platform.",
     )
@@ -239,7 +240,7 @@ class ActivateRequest(BaseModel):
 def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin handlers
     @app.get("/api/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "service": "mrds-evaluation-os"}
+        return {"status": "ok", "service": "evalgate"}
 
     @app.get("/api/features")
     def list_features(session: ApiSession = Depends(get_session)) -> list[dict[str, Any]]:
@@ -361,6 +362,31 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin 
     @app.get("/api/runs/{run_uuid}")
     def run_detail(run_uuid: str, session: ApiSession = Depends(get_session)) -> dict[str, Any]:
         return _run_detail_payload(session, run_uuid)
+
+    @app.delete("/api/runs/{run_uuid}")
+    def delete_run(
+        run_uuid: str,
+        force: bool = Query(False, description="Delete even if this run is the active baseline."),
+        session: ApiSession = Depends(get_session),
+    ) -> dict[str, Any]:
+        """Delete a run (Mission Control housekeeping) — guarded, not silent.
+
+        Cleans up the run's test results, regressions (either side), and any baseline
+        record pointing at it. If the run is the feature's *active* baseline, deletion is
+        refused unless ``force=true`` — same guarded-action shape as baseline promotion
+        (200 + ``deleted: false`` + a reason, not a hard error), so the frontend can offer
+        a "delete anyway" confirmation rather than a broken request.
+        """
+        data = session.data
+        result = data.run_detail(run_uuid)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"run '{run_uuid}' not found")
+
+        try:
+            session.store.delete_run(run_uuid, force=force)
+        except DbError as exc:
+            return {"deleted": False, "feature": result.feature, "message": str(exc)}
+        return {"deleted": True, "feature": result.feature, "run_uuid": run_uuid}
 
     @app.get("/api/runs/{run_uuid}/regressions")
     def run_regressions(

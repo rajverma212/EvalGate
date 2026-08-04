@@ -128,6 +128,41 @@ class EvaluationStore:
                 note=note,
             )
 
+    def delete_run(self, run_uuid: str, *, force: bool = False) -> RunRecord:
+        """Delete a run and everything that exists only because of it.
+
+        Removes the run's ``test_results`` (cascades via the FK), any ``regressions``
+        where it is the candidate *or* the historical baseline side, and any
+        ``baselines`` row that points at it. If the run is the feature's **active**
+        baseline, deletion is refused unless ``force=True`` — mirrors the guard on
+        baseline promotion, so a run can't be silently pulled out from under the
+        feature's quality gate. If deleting it empties the feature (no runs left), the
+        feature simply stops appearing in the fleet (``features()`` is derived from
+        ``runs``) — no separate cleanup needed.
+
+        Raises:
+            DbError: if the run doesn't exist, or it is the active baseline and
+                ``force`` is not set.
+        """
+        run = self.runs.get_by_uuid(run_uuid)
+        if run is None:
+            raise DbError(f"Cannot delete unknown run '{run_uuid}'")
+
+        active = self.baselines.get_active(run.feature_name)
+        if active is not None and active.run_id == run.id and not force:
+            raise DbError(
+                f"Run '{run_uuid}' is the active baseline for '{run.feature_name}'; "
+                "promote a different run first, or pass force=True."
+            )
+
+        with self._db.transaction():
+            self.regressions.delete_for_run(run.id)
+            self.baselines.delete_for_run(run.id)
+            self.runs.delete(run.id)
+
+        logger.info("Deleted run %s for %s", run_uuid, run.feature_name)
+        return run
+
     # -- reads / reconstruction -------------------------------------------------
 
     def latest_run_uuid(self, feature: str) -> str | None:
