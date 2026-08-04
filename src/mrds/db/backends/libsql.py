@@ -15,11 +15,26 @@ support ``row_factory``, whereas EvalOS's repositories read columns by name and 
 and, using each cursor's ``description``, yields :class:`_Row` objects that support integer
 and string indexing and the mapping protocol — so no caller above the backend changes.
 
+**Sync is throttled, not per-request.** Every ``EvaluationStore`` operation opens a fresh
+connection (see ``ApiSession``), and an embedded replica's ``.sync()`` is a real network
+round-trip to the Turso primary — calling it unconditionally on every connect turned every
+API request into a ~1s wait, dominating perceived site latency. But a fresh
+``libsql.connect()`` against an *already-synced* local replica file is a fast local file
+open (~0.1s), and — proven empirically — any connection opened against that same local file
+immediately sees writes committed by another connection to it, with **no sync required**:
+writes land in the local file directly, not only on the remote primary. So ``.sync()`` is
+only actually needed to pull in changes made by a *different process* (another serverless
+instance, a different region). We throttle it to at most once per
+``_SYNC_INTERVAL_SECONDS`` per process — bounding cross-instance staleness to a few seconds
+(imperceptible in practice) while making same-instance traffic (the overwhelming majority of
+requests) pay zero network cost per connect.
+
 Selecting this backend is configuration only: ``MRDS_STORAGE_BACKEND=libsql``.
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -32,6 +47,13 @@ from mrds.observability.logging import get_logger
 logger = get_logger(__name__)
 
 _IN_MEMORY = ":memory:"
+
+#: Minimum time between real ``.sync()`` network round-trips to the Turso primary, per
+#: process/sync_url. Keyed by sync_url so multiple databases in one process throttle
+#: independently. Module-level (not per-backend-instance) because each API request builds
+#: a fresh ``LibsqlBackend``/connection, so the throttle must outlive any single request.
+_SYNC_INTERVAL_SECONDS = 3.0
+_last_synced_at: dict[str, float] = {}
 
 
 class _Row:
@@ -72,6 +94,10 @@ class _Cursor:
     @property
     def lastrowid(self) -> int | None:
         return self._cur.lastrowid
+
+    @property
+    def rowcount(self) -> int:
+        return self._cur.rowcount
 
     @property
     def description(self) -> Any:
@@ -188,7 +214,11 @@ class LibsqlBackend(StorageBackend):
         raw = libsql.connect(self._database_path, **kwargs)
         db = LibsqlDatabase(raw, path=self._database_path)
         if self._sync_url is not None:
-            db.connection.sync()  # type: ignore[attr-defined] - pull latest before use
+            now = time.monotonic()
+            last = _last_synced_at.get(self._sync_url, 0.0)
+            if now - last >= _SYNC_INTERVAL_SECONDS:
+                db.connection.sync()  # type: ignore[attr-defined] - pull remote changes
+                _last_synced_at[self._sync_url] = now
         db.bootstrap()
         logger.info(
             "Opened libSQL database at %s%s",

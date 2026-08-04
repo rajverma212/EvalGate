@@ -135,3 +135,65 @@ def test_libsql_persists_across_reconnects(tmp_path) -> None:
 
     reopened = EvaluationStore(LibsqlBackend(db_file).connect())
     assert "persist_me" in DashboardData(reopened).features()
+
+
+# -- sync throttling (the perceived-lag fix) -------------------------------------
+
+
+def test_replica_sync_is_throttled_not_per_connect(tmp_path, monkeypatch) -> None:
+    """Regression test for the ~1s-per-request lag: an unconditional ``.sync()`` on every
+    connect turned every API request into a network round-trip. Only the first connect
+    within the throttle window should sync; later ones (same sync_url) reuse the local
+    file with no network call, until the window elapses.
+
+    A real local libSQL connection provides genuine query/bootstrap behavior; only
+    ``.sync()`` is faked (counted, no network) so this test needs no live Turso creds.
+    """
+    import time
+
+    import libsql
+
+    import mrds.db.backends.libsql as libsql_backend
+
+    sync_calls = {"count": 0}
+    real_connect = libsql.connect
+
+    class _CountingSyncProxy:
+        """Delegates everything to a real local connection except ``.sync()`` (counted,
+        no network) — the real connection type is a Rust extension object and its
+        attributes can't be monkeypatched directly."""
+
+        def __init__(self, real: object) -> None:
+            self._real = real
+
+        def sync(self) -> None:
+            sync_calls["count"] += 1
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._real, name)
+
+    def fake_connect(path: str, **kwargs: object) -> object:
+        # sync_url/auth_token are accepted (matching the real signature) but ignored —
+        # delegate to a genuine local connection so schema/bootstrap behavior is real.
+        return _CountingSyncProxy(real_connect(path))
+
+    monkeypatch.setattr(libsql, "connect", fake_connect)
+    libsql_backend._last_synced_at.clear()  # isolate from other tests/processes
+
+    backend = libsql_backend.LibsqlBackend(
+        tmp_path / "t.db", sync_url="fake://primary", auth_token="tok"
+    )
+
+    backend.connect().close()
+    assert sync_calls["count"] == 1  # first connect in the window: syncs
+
+    backend.connect().close()
+    backend.connect().close()
+    assert sync_calls["count"] == 1  # same window: no additional network sync
+
+    # Simulate the throttle window having elapsed.
+    libsql_backend._last_synced_at["fake://primary"] = (
+        time.monotonic() - libsql_backend._SYNC_INTERVAL_SECONDS - 1
+    )
+    backend.connect().close()
+    assert sync_calls["count"] == 2  # window elapsed: syncs again
