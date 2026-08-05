@@ -242,6 +242,32 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin 
     def health() -> dict[str, Any]:
         return {"status": "ok", "service": "evalgate"}
 
+    @app.get("/api/_debug/perf")
+    def debug_perf() -> dict[str, Any]:
+        """TEMPORARY diagnostic: time exactly what ApiSession pays per request, and
+        report the sync-throttle's live state, to ground-truth live latency without
+        depending on Vercel's log capture. Remove after the investigation."""
+        import time as _time
+
+        from mrds.db.backends import get_backend
+        from mrds.db.backends.libsql import _last_synced_at
+
+        t0 = _time.monotonic()
+        backend = get_backend()
+        t1 = _time.monotonic()
+        db = backend.connect(check_same_thread=False)
+        t2 = _time.monotonic()
+        db.close()
+        t3 = _time.monotonic()
+        return {
+            "backend_name": backend.name,
+            "build_backend_s": round(t1 - t0, 4),
+            "connect_s": round(t2 - t1, 4),
+            "close_s": round(t3 - t2, 4),
+            "total_s": round(t3 - t0, 4),
+            "sync_throttle_state": dict(_last_synced_at),
+        }
+
     @app.get("/api/features")
     def list_features(session: ApiSession = Depends(get_session)) -> list[dict[str, Any]]:
         data = session.data
