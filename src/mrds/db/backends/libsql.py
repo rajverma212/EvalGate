@@ -211,14 +211,29 @@ class LibsqlBackend(StorageBackend):
             if self._auth_token is not None:
                 kwargs["auth_token"] = self._auth_token
 
+        t_connect0 = time.monotonic()
         raw = libsql.connect(self._database_path, **kwargs)
+        t_connect1 = time.monotonic()
         db = LibsqlDatabase(raw, path=self._database_path)
+        synced = False
+        t_sync_elapsed = 0.0
         if self._sync_url is not None:
             now = time.monotonic()
             last = _last_synced_at.get(self._sync_url, 0.0)
-            if now - last >= _SYNC_INTERVAL_SECONDS:
+            since_last = now - last
+            if since_last >= _SYNC_INTERVAL_SECONDS:
+                t_sync0 = time.monotonic()
                 db.connection.sync()  # type: ignore[attr-defined] - pull remote changes
+                t_sync_elapsed = time.monotonic() - t_sync0
                 _last_synced_at[self._sync_url] = now
+                synced = True
+            logger.info(
+                "PERF connect=%.3fs sync=%s(%.3fs) since_last_sync=%.1fs",
+                t_connect1 - t_connect0,
+                synced,
+                t_sync_elapsed,
+                since_last,
+            )
         db.bootstrap()
         logger.info(
             "Opened libSQL database at %s%s",
