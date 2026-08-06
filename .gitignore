@@ -33,3 +33,4 @@ reports/
 .idea/
 .vscode/
 .vercel
+.env*

@@ -126,6 +126,14 @@ def register_installed_features(
     also from the database — the union, so a feature persisted in either place is
     registered. Returns the names newly registered. Idempotent; never clobbers an
     existing (hand-coded or previously registered) feature.
+
+    When ``store`` is given, registered features are built with the **database**-backed
+    prompt registry (:func:`load_prompts_from_store`), not just ``prompts_dir``. A
+    feature activated purely through the web has no filesystem prompt at all (Phase 6
+    made the DB the system of record; nothing writes to ``specs_dir``/``prompts_dir``
+    anymore) — without this, ``GenericStructuredFeature`` falls back to filesystem
+    discovery per case, finds nothing, and every case errors on any evaluation after the
+    first (e.g. a later ``mrds evaluate`` run in a fresh process).
     """
     from mrds.features.spec import build_from_spec  # lazy: avoid the import cycle (see above)
 
@@ -133,11 +141,15 @@ def register_installed_features(
     if store is not None:
         specs.extend(discover_specs_from_store(store))
 
+    prompt_registry = load_prompts_from_store(store) if store is not None else None
+
     registered: list[str] = []
     for spec in specs:
         if spec.feature_name in registry:
             continue
-        feature = build_from_spec(spec, prompts_dir=Path(prompts_dir))
+        feature = build_from_spec(
+            spec, prompt_registry=prompt_registry, prompts_dir=Path(prompts_dir)
+        )
         registry.register(feature)
         registered.append(spec.feature_name)
     return registered
