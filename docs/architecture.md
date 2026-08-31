@@ -105,7 +105,7 @@ model-regression-detector/
 │       │
 │       ├── api/                    # HTTP API (FastAPI) — backs the web frontend
 │       │   ├── app.py             # Feature-agnostic routes (per-request DB session)
-│       │   ├── runtime.py         # ApiSession: one SQLite connection per request
+│       │   ├── runtime.py         # ApiSession: shared connection for reads, private for writes
 │       │   └── serializers.py     # JSON wire contract (verdicts, deltas, explained cases)
 │       │
 │       ├── core/                   # Shared primitives, feature-agnostic
@@ -415,6 +415,14 @@ A single SQLite database (`data/eval.db`) is the **system of record**. WAL mode 
 Two backends ship today, selected by `MRDS_STORAGE_BACKEND`:
 - **`sqlite`** (default) — the local SQLite file; what local dev and CI use.
 - **`libsql`** — libSQL / Turso (`db/backends/libsql.py`, optional `.[libsql]` extra). A local libSQL file, or — when `TURSO_DATABASE_URL` (+ `TURSO_AUTH_TOKEN`) is set — a **Turso embedded replica** synced from a remote primary: reads are local, writes go to the primary, so state is durable and shared across instances (the missing piece for a serverless deploy where activated features must survive cold starts). libSQL speaks the same SQL, so the schema, migrations, repositories, and every layer above run unchanged; the one adaptation is a small row adapter (`_Connection`/`_Row`) that gives libSQL's tuple rows the by-name / `dict(row)` access the repositories expect from `sqlite3.Row`. Switching is config-only — the CLI runtime, seeding, and DB-native activation all run over libSQL untouched (proven end-to-end in `tests/unit/test_libsql_backend.py`).
+
+**Connection strategy: warm shared reads, private writes.** With a remote primary, *opening* a connection is the dominant cost — `libsql.connect(path, sync_url=…)` performs its own network handshake on every call (measured ~150 ms locally, ~0.6-0.75 s from Vercel), while querying an already-open connection costs ~0.1 ms. Opening one per HTTP request therefore put a network round-trip on every request. `StorageBackend.connect()` now takes a `shared` hint:
+
+- **Reads** (`get_session`, 11 of 14 endpoints) pass `shared=True`. The libSQL backend keeps one warm connection per database for the life of the process and hands it to every reader, so the handshake is paid once per warm process rather than once per request. `close()` on a shared connection is a no-op, so callers still close unconditionally. This is safe for readers specifically: the driver enforces no thread affinity and serialises concurrent use internally (verified — 8 threads, no errors, no lost writes), and a `SELECT` never opens a transaction, so no reader can leave pending state for another thread to commit.
+- **Writes** (`get_write_session` — baseline promotion, run deletion, activation) always get a private connection. Sharing one across concurrent writers would let one thread's `commit()` commit another's half-finished transaction, with `rollback()` unable to undo it (reproduced directly); the platform relies on multi-statement transactions, and activation holds one open across the first evaluation's LLM calls. Write endpoints are rare and already slow, so the handshake is noise there.
+- **Freshness** is delegated to the driver: shared replica connections are opened with `sync_interval`, so libSQL refreshes from the primary on a background timer and no request ever blocks on the ~290 ms explicit `.sync()`. Measured staleness for a write made by a different connection: ~1.3 s. Private connections keep the older throttled explicit sync.
+
+Connection *pooling* was measured and rejected: six concurrent connections on one replica file produced `database is locked` errors and silently lost writes, while a single shared connection did the same work 27x faster with none. The `sqlite` backend ignores `shared` — opening a local connection is essentially free, and `sqlite3` connections genuinely are unsafe to share across threads.
 
 **Feature specs in the database (schema v2).** Installed feature specifications live in the `feature_specs` table — one row per feature, holding the serialized `FeatureSpec` as opaque `spec_json` keyed by `content_hash`, so the DB layer stays feature-agnostic. Activation persists the spec here (via `run_first_evaluation`) in addition to writing `specs/<name>.yaml`, and `discover_specs_from_store` / `register_installed_features(store=…)` can register features straight from the database. This is the first step of moving feature bundles off the filesystem and into the system of record; the filesystem copy remains the discovery default until a later cutover.
 

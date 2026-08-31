@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from mrds.api.app import create_app, get_llm_client, get_session
+from mrds.api.app import create_app, get_llm_client, get_session, get_write_session
 from mrds.api.runtime import ApiSession
 from mrds.db import EvaluationStore, SqliteBackend, open_database
 from mrds.demo import seed_demo
@@ -54,6 +54,7 @@ def client(_seeded_db: Path, tmp_path: Path) -> Iterator[TestClient]:
             session.close()
 
     app.dependency_overrides[get_session] = _override
+    app.dependency_overrides[get_write_session] = _override
     with TestClient(app) as test_client:
         yield test_client
 
@@ -312,6 +313,7 @@ def _activate_app(db_path: Path, *, with_client: bool) -> object:
             session.close()
 
     app.dependency_overrides[get_session] = _session
+    app.dependency_overrides[get_write_session] = _session
     if with_client:
         app.dependency_overrides[get_llm_client] = lambda: _ActivateStub()
     return app

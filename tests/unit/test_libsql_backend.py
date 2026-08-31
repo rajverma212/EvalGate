@@ -7,7 +7,7 @@ the persistence layer. Skipped if the optional ``libsql`` package is not install
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import pytest
 
@@ -197,3 +197,202 @@ def test_replica_sync_is_throttled_not_per_connect(tmp_path, monkeypatch) -> Non
     )
     backend.connect().close()
     assert sync_calls["count"] == 2  # window elapsed: syncs again
+
+
+# -- shared warm connections (the per-request connect-cost fix) -------------------
+
+
+@pytest.fixture(autouse=True)
+def _no_leaked_shared_connections() -> Iterator[None]:
+    """Shared connections are process-scoped by design; keep them from crossing tests."""
+    from mrds.db.backends.libsql import reset_shared_connections
+
+    reset_shared_connections()
+    yield
+    reset_shared_connections()
+
+
+def test_shared_connect_reuses_one_connection_private_connect_does_not(tmp_path) -> None:
+    """The fix itself: read callers reuse one warm connection instead of each paying to
+    open one. Against Turso that handshake is a ~150-750 ms network round-trip per call."""
+    backend = LibsqlBackend(tmp_path / "eval.db")
+
+    first = backend.connect(shared=True)
+    second = backend.connect(shared=True)
+    assert first is second, "shared readers must reuse the process's warm connection"
+    assert first.is_shared
+
+    # A second backend instance pointed at the same database shares it too — each request
+    # builds its own backend object, so the cache cannot live on the instance.
+    assert LibsqlBackend(tmp_path / "eval.db").connect(shared=True) is first
+
+    private = backend.connect()
+    assert private is not first, "writers must get their own connection"
+    assert not private.is_shared
+    private.close()
+
+
+def test_shared_connections_are_keyed_by_database(tmp_path) -> None:
+    a = LibsqlBackend(tmp_path / "a.db").connect(shared=True)
+    b = LibsqlBackend(tmp_path / "b.db").connect(shared=True)
+    assert a is not b
+
+
+def test_closing_a_shared_session_leaves_the_connection_usable(tmp_path) -> None:
+    """Every request closes its session; a shared connection must survive that, since
+    other in-flight requests are still using it."""
+    backend = LibsqlBackend(tmp_path / "eval.db")
+    db = backend.connect(shared=True)
+
+    db.close()  # what ApiSession.close() does — a no-op for a shared connection
+
+    # Still usable by the next caller.
+    assert DashboardData(EvaluationStore(backend.connect(shared=True))).features() == []
+
+
+def test_reset_closes_shared_connections_for_real(tmp_path) -> None:
+    from mrds.db.backends.libsql import reset_shared_connections
+
+    backend = LibsqlBackend(tmp_path / "eval.db")
+    first = backend.connect(shared=True)
+    reset_shared_connections()
+    assert backend.connect(shared=True) is not first, "reset must force a fresh connection"
+
+
+def test_shared_connection_serves_concurrent_readers(tmp_path) -> None:
+    """Sharing is only safe because the driver enforces no thread affinity and serialises
+    concurrent use internally — FastAPI runs sync endpoints on a threadpool."""
+    import threading
+
+    backend = LibsqlBackend(tmp_path / "eval.db")
+    seed_db = backend.connect()
+    spec = infer_feature_spec(_RAW, feature_name="shared_feat", feature_type="classification")
+    activate_feature_from_store(
+        spec,
+        cases=_RAW["cases"],
+        system_prompt="Classify. JSON.",
+        store=EvaluationStore(seed_db),
+        client=_Stub(),
+    )
+    seed_db.close()
+
+    errors: list[str] = []
+    seen: list[list[str]] = []
+
+    def reader() -> None:
+        try:
+            for _ in range(25):
+                data = DashboardData(EvaluationStore(backend.connect(shared=True)))
+                seen.append(data.features())
+        except Exception as exc:  # noqa: BLE001 - any failure is the finding
+            errors.append(f"{type(exc).__name__}: {exc}")
+
+    threads = [threading.Thread(target=reader) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert seen == [["shared_feat"]] * 200
+
+
+def test_shared_replica_delegates_freshness_to_the_driver(tmp_path, monkeypatch) -> None:
+    """A shared connection is long-lived, so it must ask the driver to refresh the replica
+    on a background timer rather than have a request pay for an explicit (~290 ms) sync."""
+    import libsql
+
+    import mrds.db.backends.libsql as libsql_backend
+
+    calls: list[dict[str, object]] = []
+    sync_calls = {"count": 0}
+    real_connect = libsql.connect
+
+    class _CountingSyncProxy:
+        def __init__(self, real: object) -> None:
+            self._real = real
+
+        def sync(self) -> None:
+            sync_calls["count"] += 1
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._real, name)
+
+    def fake_connect(path: str, **kwargs: object) -> object:
+        calls.append(kwargs)
+        return _CountingSyncProxy(real_connect(path))
+
+    monkeypatch.setattr(libsql, "connect", fake_connect)
+    libsql_backend._last_synced_at.clear()
+
+    backend = libsql_backend.LibsqlBackend(
+        tmp_path / "t.db", sync_url="fake://primary", auth_token="tok"
+    )
+    backend.connect(shared=True)
+    backend.connect(shared=True)
+    backend.connect(shared=True)
+
+    assert len(calls) == 1, "the replica handshake is paid once, not once per caller"
+    assert calls[0]["sync_interval"] == libsql_backend._SYNC_INTERVAL_SECONDS
+    assert sync_calls["count"] == 0, "no request should block on an explicit sync"
+
+
+def test_local_libsql_file_gets_no_sync_interval(tmp_path, monkeypatch) -> None:
+    """``sync_interval`` is meaningless without a primary to sync from; don't send it."""
+    import libsql
+
+    import mrds.db.backends.libsql as libsql_backend
+
+    calls: list[dict[str, object]] = []
+    real_connect = libsql.connect
+
+    def fake_connect(path: str, **kwargs: object) -> object:
+        calls.append(kwargs)
+        return real_connect(path)
+
+    monkeypatch.setattr(libsql, "connect", fake_connect)
+    libsql_backend.LibsqlBackend(tmp_path / "t.db").connect(shared=True)
+    assert calls == [{}]
+
+
+def test_dead_shared_connection_is_replaced_not_reused(tmp_path) -> None:
+    """A shared connection outlives the request that opened it, so it can be found dead
+    later (a serverless instance frozen and thawed, a dropped replica session). One bad
+    handle must not poison every later request for the life of the process."""
+    backend = LibsqlBackend(tmp_path / "eval.db")
+    first = backend.connect(shared=True)
+
+    first.close(force=True)  # simulate the handle dying underneath us
+    assert not first.is_usable()
+
+    replacement = backend.connect(shared=True)
+    assert replacement is not first, "a dead shared connection must be reopened"
+    assert replacement.is_usable()
+    assert DashboardData(EvaluationStore(replacement)).features() == []
+
+    # ...and the replacement is then itself cached, not reopened per call.
+    assert backend.connect(shared=True) is replacement
+
+
+def test_live_shared_connection_is_not_needlessly_reopened(tmp_path) -> None:
+    """The liveness probe must not cost a reconnect on the happy path — that would undo
+    the entire point of sharing."""
+    import libsql
+
+    import mrds.db.backends.libsql as libsql_backend
+
+    connects = {"count": 0}
+    real_connect = libsql.connect
+
+    def counting_connect(path: str, **kwargs: object) -> object:
+        connects["count"] += 1
+        return real_connect(path, **kwargs)
+
+    backend = libsql_backend.LibsqlBackend(tmp_path / "eval.db")
+    backend.connect(shared=True)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(libsql, "connect", counting_connect)
+        for _ in range(10):
+            backend.connect(shared=True)
+    assert connects["count"] == 0

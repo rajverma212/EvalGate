@@ -28,12 +28,26 @@ class StorageBackend(ABC):
         """Stable identifier for the backend (e.g. ``"sqlite"``); used in logs."""
 
     @abstractmethod
-    def connect(self, *, check_same_thread: bool = True) -> Database:
+    def connect(self, *, check_same_thread: bool = True, shared: bool = False) -> Database:
         """Open a connected, schema-bootstrapped :class:`Database`.
 
-        Each call returns an independent connection that the caller **owns and must
-        close**. ``check_same_thread`` is forwarded for engines (SQLite) that
-        enforce connection thread-affinity; backends to which it does not apply may
-        ignore it. The returned :class:`Database` is the single contract all
-        backends honour, so callers never branch on which engine is in use.
+        ``check_same_thread`` is forwarded for engines (SQLite) that enforce connection
+        thread-affinity; backends to which it does not apply may ignore it. The returned
+        :class:`Database` is the single contract all backends honour, so callers never
+        branch on which engine is in use.
+
+        Args:
+            check_same_thread: See above.
+            shared: A **hint** that the caller is read-only and would accept a connection
+                already open in this process, so an engine for which connecting is
+                expensive (libSQL against a remote Turso primary) can keep one warm rather
+                than pay a network handshake per caller. Backends may ignore it and return
+                a private connection; SQLite does, since opening is already cheap and its
+                connections are not safe to share across threads.
+
+        Returns:
+            A connection the caller **owns and must close** — except when it asked for
+            ``shared=True`` and the backend honoured it, in which case the connection
+            belongs to the process and ``close()`` on it is a no-op. Calling ``close()``
+            unconditionally is therefore always correct.
         """

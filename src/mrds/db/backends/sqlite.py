@@ -33,5 +33,8 @@ class SqliteBackend(StorageBackend):
         """The configured path, or ``None`` when deferring to settings."""
         return self._database_path
 
-    def connect(self, *, check_same_thread: bool = True) -> Database:
+    def connect(self, *, check_same_thread: bool = True, shared: bool = False) -> Database:
+        # ``shared`` is deliberately ignored: a local sqlite3 connection opens in well under
+        # a millisecond, so there is nothing to amortise, and sqlite3 connections are not
+        # safe to share across FastAPI's threadpool. Every caller gets its own.
         return open_database(self._database_path, check_same_thread=check_same_thread)

@@ -6,9 +6,11 @@ seam (or, for promotion, the existing :class:`EvaluationStore` /
 :class:`BaselinePromoter`) and hands the result to a serializer. It contains **zero**
 feature-specific branches, consistent with the platform's feature-agnostic core.
 
-Each request gets its own :class:`ApiSession` (one SQLite connection) via the
-``get_session`` dependency — see ``runtime.py`` for why sharing one connection across
-FastAPI's threadpool is unsafe. Run it with ``python -m mrds.api``.
+Each request gets an :class:`ApiSession` via a dependency chosen by what the endpoint
+does: ``get_session`` for the read-only majority, which may reuse the process's warm
+connection, and ``get_write_session`` for the three mutating endpoints, which always get a
+private connection so their transaction is isolated. ``runtime.py`` explains why the split
+exists. Run it with ``python -m mrds.api``.
 """
 
 from __future__ import annotations
@@ -56,8 +58,22 @@ from mrds.regression.promotion import BaselinePromoter
 
 
 def get_session() -> Iterator[ApiSession]:
-    """FastAPI dependency: a request-scoped DB session, always closed afterwards."""
-    session = ApiSession()
+    """FastAPI dependency for **read-only** endpoints: a session over the process's warm,
+    shared connection where the backend offers one, always released afterwards."""
+    session = ApiSession(shared=True)
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def get_write_session() -> Iterator[ApiSession]:
+    """FastAPI dependency for endpoints that **mutate** the database.
+
+    Identical to :func:`get_session` except that it never shares a connection: writers need
+    an isolated transaction, so they always open a private one. See ``runtime.py``.
+    """
+    session = ApiSession(shared=False)
     try:
         yield session
     finally:
@@ -303,7 +319,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin 
 
     @app.post("/api/features/{feature}/baseline/promote")
     def promote_baseline(
-        feature: str, body: PromoteRequest, session: ApiSession = Depends(get_session)
+        feature: str, body: PromoteRequest, session: ApiSession = Depends(get_write_session)
     ) -> dict[str, Any]:
         data = session.data
         candidate = data.run_detail(body.run_uuid)
@@ -367,7 +383,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin 
     def delete_run(
         run_uuid: str,
         force: bool = Query(False, description="Delete even if this run is the active baseline."),
-        session: ApiSession = Depends(get_session),
+        session: ApiSession = Depends(get_write_session),
     ) -> dict[str, Any]:
         """Delete a run (Mission Control housekeeping) — guarded, not silent.
 
@@ -473,7 +489,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin 
     @app.post("/api/onboarding/activate")
     def onboarding_activate(
         body: ActivateRequest,
-        session: ApiSession = Depends(get_session),
+        session: ApiSession = Depends(get_write_session),
         client: StructuredLLMClient | None = Depends(get_llm_client),
     ) -> dict[str, Any]:
         """Activate an onboarded feature end-to-end: persist → register → evaluate.
