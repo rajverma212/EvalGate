@@ -29,6 +29,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    # CLAUDE.md sets a ~90% coverage target on core/eval/regression/db; without this the
+    # target is unmeasurable, so it ships with the dev extra rather than as a local habit.
+    "pytest-cov>=5.0",
     "ruff>=0.4",
     # Installed in dev so the libSQL backend's parity tests actually run.
     "libsql>=0.1",
