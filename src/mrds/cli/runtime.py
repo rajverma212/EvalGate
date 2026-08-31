@@ -1,6 +1,6 @@
 """CLI runtime — the dependency bundle the commands operate on.
 
-Bundling the store, engine, detector, and reporter behind one object gives a
+Bundling the store, engine, detector, reporter, and notifier behind one object gives a
 single dependency-injection seam: production builds it from real registries and
 the configured database, while tests inject a runtime backed by fakes (no network,
 in-memory database).
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from mrds.activation.bootstrap import bootstrap_platform
 from mrds.activation.discovery import load_datasets_from_store, load_prompts_from_store
+from mrds.alerting import SlackNotifier
 from mrds.db import EvaluationStore, get_backend
 from mrds.evaluation import EvaluationEngine
 from mrds.observability.logging import get_logger
@@ -29,6 +30,9 @@ class CliRuntime:
     engine: EvaluationEngine
     detector: RegressionDetector
     reporter: ReportBuilder
+    #: Best-effort Slack alerts. Always present; a no-op when no webhook is configured,
+    #: so commands can call it unconditionally without branching on configuration.
+    notifier: SlackNotifier
 
 
 def build_runtime() -> CliRuntime:
@@ -49,6 +53,7 @@ def build_runtime() -> CliRuntime:
         ),
         detector=RegressionDetector(),
         reporter=ReportBuilder(),
+        notifier=SlackNotifier(),
     )
     logger.debug("Built CLI runtime (db=%s)", database.path)
     return runtime

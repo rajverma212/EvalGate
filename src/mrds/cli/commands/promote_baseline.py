@@ -67,5 +67,16 @@ def run(args: argparse.Namespace, runtime: CliRuntime) -> int:
         print(f"severity vs previous baseline: {eligibility.severity.value}")
     if args.force and not eligibility.eligible:
         print("(forced promotion despite ineligibility)")
+
+    # Best-effort announcement; never raises, so it cannot fail a successful promotion.
+    alert = runtime.notifier.notify_promotion(
+        candidate_result,
+        promoted_by=args.promoted_by,
+        note=args.note,
+        eligibility=eligibility,
+    )
+    if alert.error:
+        print(f"warning: Slack alert failed: {alert.error}", file=sys.stderr)
+
     logger.info("promoted baseline for %s -> run %s", feature, args.run)
     return EXIT_OK

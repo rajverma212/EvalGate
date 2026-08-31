@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,6 +10,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+from mrds.alerting import SlackClient, SlackNotifier
 from mrds.cli.main import build_parser, main
 from mrds.cli.runtime import CliRuntime
 from mrds.core.interfaces import ScoreResult
@@ -50,7 +52,7 @@ class ConstantEmailClient:
         return LLMResult(parsed=out, model=model, input_tokens=5, output_tokens=3, total_tokens=8)
 
 
-def _runtime() -> CliRuntime:
+def _runtime(notifier: SlackNotifier | None = None) -> CliRuntime:
     prompts = PromptRegistry.from_directory(Path("prompts"))
     # Default (registry-based) resolver — the datasets dir is multi-feature.
     datasets = DatasetRegistry.from_directory(Path("datasets"))
@@ -63,6 +65,9 @@ def _runtime() -> CliRuntime:
         engine=engine,
         detector=RegressionDetector(),
         reporter=ReportBuilder(),
+        # conftest strips SLACK_WEBHOOK_URL, so this notifier is disabled and inert;
+        # the tests that assert on alerting inject one with a fake transport instead.
+        notifier=notifier or SlackNotifier(),
     )
 
 
@@ -282,3 +287,93 @@ def test_promote_blocks_worse_run_without_force() -> None:
 def test_promote_unknown_run_errors() -> None:
     rt = _runtime()
     assert main(["promote-baseline", "--run", "nope"], runtime=rt) == 2
+
+
+# -- Slack alerting is actually wired to the commands ----------------------------
+
+
+class _RecordingTransport:
+    """Captures webhook posts instead of sending them; mirrors ``Transport``."""
+
+    def __init__(self, raise_exc: Exception | None = None) -> None:
+        self.posts: list[dict] = []
+        self._raise_exc = raise_exc
+
+    def __call__(self, url: str, body: bytes, headers: dict[str, str], timeout: float) -> int:
+        if self._raise_exc is not None:
+            raise self._raise_exc
+        self.posts.append(json.loads(body.decode()))
+        return 200
+
+
+def _recording_notifier(
+    raise_exc: Exception | None = None,
+) -> tuple[SlackNotifier, _RecordingTransport]:
+    transport = _RecordingTransport(raise_exc)
+    return SlackNotifier(
+        client=SlackClient("https://hooks.example/x", transport=transport)
+    ), transport
+
+
+def test_compare_sends_a_slack_alert_on_a_blocking_regression(tmp_path: Path) -> None:
+    """README §9 and the architecture diagram both promise an alert here; this is the test
+    that keeps that promise true."""
+    notifier, transport = _recording_notifier()
+    rt = _runtime(notifier)
+    baseline = _persist_result(rt, "base-1", cat_mean=0.95, pass_rate=1.0)
+    rt.store.promote_baseline(baseline, promoted_by="test", note="")
+    candidate = _persist_result(rt, "cand-1", cat_mean=0.40, pass_rate=0.40)
+
+    code = main(
+        ["compare", "--feature", "email_classifier", "--run", candidate, "--no-report"],
+        runtime=rt,
+    )
+
+    assert code == 1, "the gate must still block"
+    assert len(transport.posts) == 1, "a blocking regression must raise a Slack alert"
+    assert "email_classifier" in json.dumps(transport.posts[0])
+
+
+def test_compare_does_not_alert_when_there_is_no_regression(tmp_path: Path) -> None:
+    notifier, transport = _recording_notifier()
+    rt = _runtime(notifier)
+    baseline = _persist_result(rt, "base-2", cat_mean=0.90, pass_rate=0.90)
+    rt.store.promote_baseline(baseline, promoted_by="test", note="")
+    candidate = _persist_result(rt, "cand-2", cat_mean=0.92, pass_rate=0.92)
+
+    code = main(
+        ["compare", "--feature", "email_classifier", "--run", candidate, "--no-report"],
+        runtime=rt,
+    )
+    assert code == 0
+    assert transport.posts == [], "a healthy run must not spam Slack"
+
+
+def test_promote_baseline_sends_a_slack_alert(tmp_path: Path) -> None:
+    notifier, transport = _recording_notifier()
+    rt = _runtime(notifier)
+    run_id = _persist_result(rt, "promote-me", cat_mean=0.95, pass_rate=0.95)
+
+    code = main(["promote-baseline", "--run", run_id], runtime=rt)
+
+    assert code == 0
+    assert len(transport.posts) == 1
+    assert "email_classifier" in json.dumps(transport.posts[0])
+
+
+def test_a_failing_slack_delivery_never_changes_the_exit_code(tmp_path: Path) -> None:
+    """Alerting is best-effort: the merge gate must not depend on Slack being reachable."""
+    notifier, _ = _recording_notifier(raise_exc=TimeoutError("slack is down"))
+    rt = _runtime(notifier)
+    baseline = _persist_result(rt, "base-3", cat_mean=0.95, pass_rate=1.0)
+    rt.store.promote_baseline(baseline, promoted_by="test", note="")
+    candidate = _persist_result(rt, "cand-3", cat_mean=0.40, pass_rate=0.40)
+
+    blocked = main(
+        ["compare", "--feature", "email_classifier", "--run", candidate, "--no-report"],
+        runtime=rt,
+    )
+    assert blocked == 1, "a Slack outage must not turn a blocking regression into a pass"
+
+    promoted = main(["promote-baseline", "--run", candidate, "--force"], runtime=rt)
+    assert promoted == 0, "a Slack outage must not fail a successful promotion"

@@ -68,7 +68,10 @@ For a stronger guarantee than cache (which can be evicted), commit baseline metr
 |--------|---------|-------|
 | `OPENAI_API_KEY` | `eval.yml` (`evaluate`) | Maps to the `OPENAI_API_KEY` env var the feature reads. Absent on fork PRs → the gate self-skips. |
 
-`SLACK_WEBHOOK_URL` will be added when Slack alerting lands (next sprint).
+`SLACK_WEBHOOK_URL` is optional: set it and the gate's `compare` step posts a regression
+alert, while the green-`main` `promote-baseline` step posts a promotion alert. Alert
+delivery is best-effort and never changes an exit code, so an unset or unreachable
+webhook cannot affect whether a merge is blocked.
 
 ---
 

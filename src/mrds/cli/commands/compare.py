@@ -58,9 +58,18 @@ def run(args: argparse.Namespace, runtime: CliRuntime) -> int:
     regression = runtime.detector.compare(baseline, candidate)
     store.save_regression(regression)
 
+    report_location: str | None = None
     if args.report:
         for path in _write_reports(runtime.reporter, regression, args.report_dir):
             print(f"report: {path}")
+            report_location = report_location or str(path)
+
+    # Alert *before* the gate returns, so a blocking regression is announced even though
+    # this command is about to exit non-zero. Delivery is best-effort and never raises,
+    # so it cannot change the exit code — the gate stays honest.
+    alert = runtime.notifier.notify_regression(regression, report_location=report_location)
+    if alert.error:
+        print(f"warning: Slack alert failed: {alert.error}", file=sys.stderr)
 
     print(f"baseline={regression.baseline_run_id} candidate={regression.candidate_run_id}")
     print(

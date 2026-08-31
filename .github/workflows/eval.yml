@@ -36,6 +36,10 @@ env:
   FEATURE: email_classifier
   MRDS_DATABASE_PATH: data/eval.db
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # `mrds compare` / `promote-baseline` post to Slack when this is set. Delivery is
+  # best-effort and never changes an exit code, so an unset or broken webhook cannot
+  # affect the merge gate — it just means no alert.
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 jobs:
   regression-gate:
