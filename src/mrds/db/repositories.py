@@ -73,6 +73,13 @@ class FeatureSpecRepository:
         rows = self._conn.execute("SELECT * FROM feature_specs ORDER BY feature_name").fetchall()
         return [FeatureSpecRecord.model_validate(dict(r)) for r in rows]
 
+    def delete(self, feature_name: str) -> bool:
+        """Remove a feature's spec row. Returns whether a row was actually deleted."""
+        cursor = self._conn.execute(
+            "DELETE FROM feature_specs WHERE feature_name = ?", (feature_name,)
+        )
+        return cursor.rowcount > 0
+
 
 class PromptVersionRepository:
     """Append-only registry of prompt versions, keyed by content hash."""
@@ -122,6 +129,13 @@ class PromptVersionRepository:
             "SELECT * FROM prompt_versions ORDER BY feature_name, version"
         ).fetchall()
         return [PromptVersionRecord.model_validate(dict(r)) for r in rows]
+
+    def delete_for_feature(self, feature_name: str) -> int:
+        """Remove every prompt version belonging to a feature. Returns rows deleted."""
+        cursor = self._conn.execute(
+            "DELETE FROM prompt_versions WHERE feature_name = ?", (feature_name,)
+        )
+        return cursor.rowcount
 
 
 class DatasetVersionRepository:
@@ -181,6 +195,13 @@ class DatasetVersionRepository:
             "SELECT * FROM dataset_versions ORDER BY feature_name, version"
         ).fetchall()
         return [DatasetVersionRecord.model_validate(dict(r)) for r in rows]
+
+    def delete_for_feature(self, feature_name: str) -> int:
+        """Remove every dataset version belonging to a feature. Returns rows deleted."""
+        cursor = self._conn.execute(
+            "DELETE FROM dataset_versions WHERE feature_name = ?", (feature_name,)
+        )
+        return cursor.rowcount
 
 
 class RunRepository:

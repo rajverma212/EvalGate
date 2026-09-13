@@ -41,6 +41,8 @@ It adds **no evaluation logic**; every endpoint reuses the read-only `DashboardD
 |--------|------|---------|
 | GET | `/api/features` | fleet overview (health, baseline delta, sparkline) |
 | GET | `/api/features/{f}` | one feature's headline status |
+| DELETE | `/api/features/{f}` | remove a feature and all of its history (see below) |
+| GET | `/api/features/{f}/summary` | plain-English read of what the feature's data says |
 | GET | `/api/features/{f}/runs` | run timeline |
 | GET | `/api/features/{f}/trend` | metric time series |
 | GET | `/api/features/{f}/dataset` | golden dataset + coverage |
@@ -48,6 +50,7 @@ It adds **no evaluation logic**; every endpoint reuses the read-only `DashboardD
 | POST | `/api/features/{f}/baseline/promote` | promote a run (guarded; see below) |
 | GET | `/api/runs/{uuid}` | **the hero payload**: verdict → metrics → explained cases |
 | GET | `/api/runs/{uuid}/regressions` | root cause: regressed metric → contributing cases |
+| DELETE | `/api/runs/{uuid}` | remove one run (guarded if it is the active baseline) |
 | GET | `/api/compare?a=&b=` | run-vs-run diff |
 | POST | `/api/onboarding/infer` | infer a feature spec + scaffold a prompt from a dataset |
 | POST | `/api/onboarding/activate` | **end-to-end activation**: persist → install → register → evaluate → baseline |
@@ -56,6 +59,26 @@ It adds **no evaluation logic**; every endpoint reuses the read-only `DashboardD
 critical regression returns `promoted: false` + reasons (HTTP 200, no mutation) unless
 `force: true` — preserving the platform's "never silently overwrite with a worse run" rule,
 now surfaced in the UI as an explicit "promote anyway".
+
+**The summary panel answers "so what?".** Every other panel — runs, trend, compare,
+regressions, segments — is accurate and assumes the reader can assemble the rest into a
+conclusion. `GET /api/features/{f}/summary` does the assembling: one headline, a handful of
+plain-English sentences, and a single recommended next action. The synthesis lives in
+`dashboard/summary.py` as a **pure** function (every input passed in, nothing fetched), so
+the wording is unit-tested directly and the API layer stays presentation-only. It is
+feature-agnostic — it speaks in cases, metrics, and segments, never in a feature's domain.
+
+Two wording rules it enforces that are easy to lose: raw metric identifiers never reach the
+reader (`scorer.category_match.mean_score` becomes "the category match check" — note this is
+*stronger* than `humanize_metric_name`, which is tuned for chart labels sitting beside their
+own numbers), and counts are preferred to rates wherever a count is more concrete.
+
+**Feature deletion is unguarded on the server, on purpose.** `DELETE /api/features/{f}`
+removes every run, baseline, regression, and the spec/prompt/dataset bundle. Deleting a
+single *run* is guarded when it is the active baseline; deleting the whole feature is not,
+because the gate that guard protects is going away too. That makes the browser confirmation
+the only thing between a stray click and real data loss, so it names the feature and its run
+count rather than asking "are you sure?".
 
 **Activation is the create flow's last mile.** `POST /api/onboarding/activate` stitches the
 existing onboarding/activation/evaluation cores together without adding any evaluation or

@@ -10,6 +10,7 @@ through their JSON payloads. This is the layer the CLI commands will call.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime
 
 from mrds.core.interfaces import ScoreResult
@@ -31,6 +32,21 @@ from mrds.observability.logging import get_logger
 from mrds.regression.models import RegressionResult
 
 logger = get_logger(__name__)
+
+
+#: ``list_for_feature`` is paginated for display; feature deletion needs every row, so it
+#: asks for a bound far above any realistic run count rather than a magic literal inline.
+_ALL_RUNS = 1_000_000
+
+
+@dataclass(frozen=True)
+class DeletedFeature:
+    """What :meth:`EvaluationStore.delete_feature` removed, for reporting back."""
+
+    feature: str
+    runs_deleted: int
+    prompt_versions_deleted: int
+    dataset_versions_deleted: int
 
 
 class EvaluationStore:
@@ -162,6 +178,52 @@ class EvaluationStore:
 
         logger.info("Deleted run %s for %s", run_uuid, run.feature_name)
         return run
+
+    def delete_feature(self, feature: str) -> DeletedFeature:
+        """Remove a feature and everything the platform holds about it.
+
+        Deletes, in one transaction: every run (with its ``test_results`` via the FK
+        cascade), every regression on either side of those runs, every baseline pointing
+        at them, and then the feature's own bundle — its spec, prompt versions, and
+        dataset versions. After this the feature is gone from the fleet and from
+        discovery; re-creating the same name starts clean.
+
+        Unlike :meth:`delete_run` there is no active-baseline guard: a baseline only
+        exists to protect a feature's gate, and the whole feature is going away. The
+        confirmation belongs at the UI, which is where the intent is expressed.
+
+        Raises:
+            DbError: if the feature has neither runs nor a persisted spec — i.e. there
+                is nothing by that name to delete.
+        """
+        runs = self.runs.list_for_feature(feature, limit=_ALL_RUNS)
+        spec = self.feature_specs.get(feature)
+        if not runs and spec is None:
+            raise DbError(f"Cannot delete unknown feature '{feature}'")
+
+        with self._db.transaction():
+            for run in runs:
+                self.regressions.delete_for_run(run.id)
+                self.baselines.delete_for_run(run.id)
+                self.runs.delete(run.id)
+            prompts = self.prompt_versions.delete_for_feature(feature)
+            datasets = self.dataset_versions.delete_for_feature(feature)
+            self.feature_specs.delete(feature)
+
+        deleted = DeletedFeature(
+            feature=feature,
+            runs_deleted=len(runs),
+            prompt_versions_deleted=prompts,
+            dataset_versions_deleted=datasets,
+        )
+        logger.info(
+            "Deleted feature %s (%d runs, %d prompt versions, %d dataset versions)",
+            feature,
+            deleted.runs_deleted,
+            deleted.prompt_versions_deleted,
+            deleted.dataset_versions_deleted,
+        )
+        return deleted
 
     # -- reads / reconstruction -------------------------------------------------
 

@@ -27,6 +27,7 @@ from mrds.dashboard.data import (
     explain_case,
     humanize_metric_name,
 )
+from mrds.dashboard.summary import FeatureSummary
 from mrds.db.records import BaselineRecord, RegressionRecord, RunRecord
 from mrds.evaluation.models import AggregateMetrics, CaseResult, EvaluationResult
 from mrds.regression.models import RegressionResult
@@ -463,3 +464,15 @@ def resolve_prompt_version(data: DashboardData, prompt_version_id: int | None) -
         return ""
     record = data._store.prompt_versions.get_by_id(prompt_version_id)  # noqa: SLF001
     return record.version if record else ""
+
+
+def serialize_feature_summary(summary: FeatureSummary) -> dict[str, Any]:
+    """The plain-English feature summary, as the frontend consumes it."""
+    return {
+        "feature": summary.feature,
+        "headline": summary.headline,
+        "status": summary.status,
+        "gate": summary.gate,
+        "points": [{"label": p.label, "text": p.text, "tone": p.tone} for p in summary.points],
+        "what_to_do": summary.what_to_do,
+    }

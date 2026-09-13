@@ -171,7 +171,11 @@ export interface Recommendations {
   current_pass_rate: number;
   points_to_recover: number;
   gap_to_baseline: number | null;
-  by_category: { category: string; failing: number; recoverable_points: number }[];
+  by_category: {
+    category: string;
+    failing: number;
+    recoverable_points: number;
+  }[];
 }
 
 export interface RunDetail {
@@ -193,7 +197,11 @@ export interface RunDetail {
   segment_field: string | null;
   verdict: Verdict;
   metrics: Metrics;
-  baseline: { run_uuid: string | null; label: string | null; pass_rate: number | null } | null;
+  baseline: {
+    run_uuid: string | null;
+    label: string | null;
+    pass_rate: number | null;
+  } | null;
   regression: Comparison | null;
   recommendations: Recommendations;
   cases: CaseRow[];
@@ -350,7 +358,9 @@ export interface ActivateRequest {
 }
 
 /** Activate an onboarded feature end-to-end (install → register → evaluate → baseline). */
-export async function activateFeature(body: ActivateRequest): Promise<ActivationResult> {
+export async function activateFeature(
+  body: ActivateRequest,
+): Promise<ActivationResult> {
   const res = await fetch("/api/onboarding/activate", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -370,7 +380,10 @@ export interface DeleteRunResult {
 
 /** Delete a run (Mission Control housekeeping). Pass force to override the
  * active-baseline guard; check `.deleted` — a blocked delete resolves, not throws. */
-export async function deleteRun(runUuid: string, force = false): Promise<DeleteRunResult> {
+export async function deleteRun(
+  runUuid: string,
+  force = false,
+): Promise<DeleteRunResult> {
   const res = await fetch(`/api/runs/${runUuid}${force ? "?force=true" : ""}`, {
     method: "DELETE",
   });
@@ -379,13 +392,56 @@ export async function deleteRun(runUuid: string, force = false): Promise<DeleteR
   return data as DeleteRunResult;
 }
 
-export const getFeature = (f: string) => serverGetOr404<FeatureOverview>(`/api/features/${f}`);
-export const getRuns = (f: string) => serverGetOr404<RunSummary[]>(`/api/features/${f}/runs`);
-export const getTrend = (f: string) => serverGetOr404<TrendPoint[]>(`/api/features/${f}/trend`);
-export const getDataset = (f: string) => serverGetOr404<DatasetView>(`/api/features/${f}/dataset`);
+export interface DeleteFeatureResult {
+  deleted: boolean;
+  feature: string;
+  runs_deleted: number;
+  prompt_versions_deleted: number;
+  dataset_versions_deleted: number;
+}
+
+/** Delete a whole feature — every run, plus its spec/prompt/dataset bundle.
+ * Unguarded on the server (see the endpoint docstring); confirm before calling. */
+export async function deleteFeature(
+  feature: string,
+): Promise<DeleteFeatureResult> {
+  const res = await fetch(`/api/features/${feature}`, { method: "DELETE" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail ?? "Delete failed.");
+  return data as DeleteFeatureResult;
+}
+
+/** One plain-English sentence about the feature, tagged for display. */
+export interface SummaryPoint {
+  label: string;
+  text: string;
+  tone: "good" | "bad" | "neutral";
+}
+
+/** What the feature's data actually says, in terms a non-specialist can act on. */
+export interface FeatureSummary {
+  feature: string;
+  headline: string;
+  status: Health;
+  gate: string;
+  points: SummaryPoint[];
+  what_to_do: string | null;
+}
+
+export const getFeature = (f: string) =>
+  serverGetOr404<FeatureOverview>(`/api/features/${f}`);
+export const getRuns = (f: string) =>
+  serverGetOr404<RunSummary[]>(`/api/features/${f}/runs`);
+export const getTrend = (f: string) =>
+  serverGetOr404<TrendPoint[]>(`/api/features/${f}/trend`);
+export const getDataset = (f: string) =>
+  serverGetOr404<DatasetView>(`/api/features/${f}/dataset`);
 export const getBaseline = (f: string) =>
   serverGetOr404<BaselineResponse>(`/api/features/${f}/baseline`);
-export const getRun = (uuid: string) => serverGetOr404<RunDetail>(`/api/runs/${uuid}`);
+export const getSummary = (f: string) =>
+  serverGetOr404<FeatureSummary>(`/api/features/${f}/summary`);
+export const getRun = (uuid: string) =>
+  serverGetOr404<RunDetail>(`/api/runs/${uuid}`);
 export const getRunRegressions = (uuid: string) =>
   serverGetOr404<RegressionsResponse>(`/api/runs/${uuid}/regressions`);
 export const compareRuns = (a: string, b: string) =>

@@ -405,3 +405,81 @@ def test_activate_fails_fast_without_llm_key(
     assert resp.status_code == 422
     assert "ANTHROPIC_API_KEY" in resp.json()["detail"]
     assert client.get("/api/features").json() == []  # nothing persisted
+
+
+# -- deleting a whole feature (fleet housekeeping) --------------------------------
+
+
+def test_delete_feature_removes_it_from_the_fleet_entirely(client: TestClient) -> None:
+    before = {f["feature"] for f in client.get("/api/features").json()}
+    assert "ticket_router" in before
+    runs = client.get("/api/features/ticket_router/runs").json()
+    assert runs, "fixture should have runs to delete"
+
+    resp = client.delete("/api/features/ticket_router")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["deleted"] is True
+    assert body["feature"] == "ticket_router"
+    assert body["runs_deleted"] == len(runs)
+
+    after = {f["feature"] for f in client.get("/api/features").json()}
+    assert "ticket_router" not in after
+    assert client.get("/api/features/ticket_router").status_code == 404
+    # Every run it owned is gone too, not merely detached from the feature.
+    for run in runs:
+        assert client.get(f"/api/runs/{run['run_uuid']}").status_code == 404
+
+
+def test_delete_feature_leaves_other_features_untouched(client: TestClient) -> None:
+    other_before = client.get("/api/features/email_classifier/runs").json()
+
+    client.delete("/api/features/ticket_router")
+
+    other_after = client.get("/api/features/email_classifier/runs").json()
+    assert [r["run_uuid"] for r in other_after] == [r["run_uuid"] for r in other_before]
+    assert client.get("/api/features/email_classifier/baseline").json()["active"] is not None
+
+
+def test_delete_feature_succeeds_even_when_it_has_an_active_baseline(client: TestClient) -> None:
+    """Unlike deleting one run, there is no baseline guard — the gate it protected is
+    going away with the feature."""
+    assert client.get("/api/features/ticket_router/baseline").json()["active"] is not None
+    assert client.delete("/api/features/ticket_router").status_code == 200
+
+
+def test_delete_unknown_feature_404s(client: TestClient) -> None:
+    assert client.delete("/api/features/no_such_feature").status_code == 404
+
+
+# -- the plain-English feature summary --------------------------------------------
+
+
+def test_feature_summary_reads_as_plain_english(client: TestClient) -> None:
+    body = client.get("/api/features/email_classifier/summary").json()
+
+    assert body["feature"] == "email_classifier"
+    assert body["status"] in {"healthy", "warning", "critical", "unknown"}
+    assert body["headline"] and body["headline"][0].isupper()
+    assert body["gate"]
+
+    labels = [p["label"] for p in body["points"]]
+    assert "Latest run" in labels and "Baseline" in labels
+    for point in body["points"]:
+        assert point["tone"] in {"good", "bad", "neutral"}
+        assert point["text"].endswith((".", "!"))
+        # Raw metric identifiers must never leak into prose meant for a non-specialist.
+        assert "scorer." not in point["text"]
+        assert "_" not in point["text"].replace("pass_rate", "")
+
+
+def test_feature_summary_reflects_the_seeded_critical_regression(client: TestClient) -> None:
+    body = client.get("/api/features/email_classifier/summary").json()
+    assert body["status"] == "critical"
+    assert body["gate"] == "A merge with this run would be blocked."
+    assert body["what_to_do"] is not None
+    assert any(p["label"] == "Regressions" and p["tone"] == "bad" for p in body["points"])
+
+
+def test_feature_summary_404s_for_an_unknown_feature(client: TestClient) -> None:
+    assert client.get("/api/features/no_such_feature/summary").status_code == 404

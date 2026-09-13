@@ -33,6 +33,7 @@ from mrds.api.serializers import (
     serialize_case,
     serialize_comparison,
     serialize_dataset,
+    serialize_feature_summary,
     serialize_overview,
     serialize_recommendations,
     serialize_run_detail,
@@ -45,6 +46,7 @@ from mrds.dashboard.data import (
     cases_for_metric,
     perfect_run_recommendations,
 )
+from mrds.dashboard.summary import build_feature_summary
 from mrds.db.errors import DbError
 from mrds.db.records import BaselineRecord
 from mrds.evaluation.models import AggregateMetrics
@@ -272,11 +274,75 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin 
             raise HTTPException(status_code=404, detail=f"feature '{feature}' not found")
         return _overview_payload(data, feature)
 
+    @app.delete("/api/features/{feature}")
+    def delete_feature(
+        feature: str, session: ApiSession = Depends(get_write_session)
+    ) -> dict[str, Any]:
+        """Remove a feature and everything the platform holds about it.
+
+        Fleet housekeeping: deletes every run (with its cases), the regressions and
+        baselines attached to them, and the feature's own spec/prompt/dataset bundle. The
+        feature then disappears from Mission Control and from discovery, and the name is
+        free to be created again.
+
+        This is deliberately unguarded on the server — unlike deleting a single run, there
+        is no baseline left to protect once the whole feature is going. The confirmation
+        lives in the UI, where the user's intent is actually expressed.
+        """
+        try:
+            deleted = session.store.delete_feature(feature)
+        except DbError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {
+            "deleted": True,
+            "feature": deleted.feature,
+            "runs_deleted": deleted.runs_deleted,
+            "prompt_versions_deleted": deleted.prompt_versions_deleted,
+            "dataset_versions_deleted": deleted.dataset_versions_deleted,
+        }
+
     @app.get("/api/features/{feature}/runs")
     def feature_runs(
         feature: str, session: ApiSession = Depends(get_session)
     ) -> list[dict[str, Any]]:
         return _runs_payload(session.data, feature)
+
+    @app.get("/api/features/{feature}/summary")
+    def feature_summary(feature: str, session: ApiSession = Depends(get_session)) -> dict[str, Any]:
+        """A plain-English read of what this feature's data actually says.
+
+        Composes the same reads the individual panels use — latest run, trend, baseline,
+        regression comparison — and hands them to the pure synthesis in
+        ``dashboard/summary.py``. Adds no analysis of its own, consistent with this layer
+        being presentation only.
+        """
+        data = session.data
+        latest = data.runs(feature, limit=1)
+        if not latest:
+            raise HTTPException(status_code=404, detail=f"feature '{feature}' has no runs")
+
+        result = data.run_detail(latest[0].run_uuid)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"feature '{feature}' has no runs")
+
+        latest_uuid = latest[0].run_uuid
+        _, baseline_uuid = _baseline_run_uuid(data, feature)
+        is_baseline = baseline_uuid == latest_uuid
+        comparison = (
+            data.compare_runs(baseline_uuid, latest_uuid)
+            if baseline_uuid and not is_baseline
+            else None
+        )
+        summary = build_feature_summary(
+            feature=feature,
+            metrics=result.aggregate_metrics,
+            status=health_from_records(data.regressions_for_run(latest_uuid)),
+            trend=data.trend(feature),
+            # A run cannot meaningfully sit above or below itself.
+            baseline_pass_rate=None if is_baseline else data.baseline_pass_rate(feature),
+            comparison=comparison,
+        )
+        return serialize_feature_summary(summary)
 
     @app.get("/api/features/{feature}/trend")
     def feature_trend(

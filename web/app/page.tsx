@@ -6,13 +6,16 @@ import { Reveal } from "@/components/ui/reveal";
 import { HealthDot, StatusPill, Tag } from "@/components/ui/status";
 import { Sparkline } from "@/components/ui/sparkline";
 import { Button } from "@/components/ui/button";
+import { DeleteFeatureButton } from "@/components/delete-feature-button";
 
 export const dynamic = "force-dynamic";
 
 export default async function MissionControl() {
   const features = await getFeatures();
   const healthy = features.filter((f) => f.health === "healthy").length;
-  const attention = features.filter((f) => f.health === "warning" || f.health === "critical").length;
+  const attention = features.filter(
+    (f) => f.health === "warning" || f.health === "critical",
+  ).length;
   const rated = features.filter((f) => f.latest_pass_rate != null);
   const avg = rated.length
     ? rated.reduce((s, f) => s + (f.latest_pass_rate ?? 0), 0) / rated.length
@@ -29,9 +32,10 @@ export default async function MissionControl() {
               Mission Control
             </h1>
             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-dim">
-              The health, quality, and evolution of every AI feature you ship — in one view.
-              Each feature is tested against a golden dataset, compared to a trusted baseline,
-              and gated before it reaches production.
+              The health, quality, and evolution of every AI feature you ship —
+              in one view. Each feature is tested against a golden dataset,
+              compared to a trusted baseline, and gated before it reaches
+              production.
             </p>
           </div>
           <Button asChild variant="signal" size="lg" className="shrink-0">
@@ -47,7 +51,11 @@ export default async function MissionControl() {
         <div className="mt-10 grid grid-cols-2 divide-line rounded-2xl border border-line bg-surface/30 sm:grid-cols-4 sm:divide-x">
           <Stat label="Features tracked" value={String(features.length)} />
           <Stat label="Healthy" value={String(healthy)} tone="healthy" />
-          <Stat label="Need attention" value={String(attention)} tone={attention ? "critical" : "mute"} />
+          <Stat
+            label="Need attention"
+            value={String(attention)}
+            tone={attention ? "critical" : "mute"}
+          />
           <Stat label="Fleet pass rate" value={pct(avg, 0)} mono />
         </div>
       </Reveal>
@@ -85,11 +93,21 @@ function Stat({
   mono?: boolean;
 }) {
   const color =
-    tone === "healthy" ? "text-healthy" : tone === "critical" ? "text-critical" : "text-bright";
+    tone === "healthy"
+      ? "text-healthy"
+      : tone === "critical"
+        ? "text-critical"
+        : "text-bright";
   return (
     <div className="px-5 py-4">
       <p className="kicker">{label}</p>
-      <p className={cn("mt-1.5 text-2xl font-semibold tracking-tight", color, mono && "tnum")}>
+      <p
+        className={cn(
+          "mt-1.5 text-2xl font-semibold tracking-tight",
+          color,
+          mono && "tnum",
+        )}
+      >
         {value}
       </p>
     </div>
@@ -108,9 +126,18 @@ function FeatureCard({ f }: { f: FeatureOverview }) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <HealthDot health={f.health} />
-          <span className="text-[15px] font-medium text-bright">{f.display_name}</span>
+          <span className="text-[15px] font-medium text-bright">
+            {f.display_name}
+          </span>
         </div>
-        <StatusPill health={f.health} />
+        <div className="flex items-center gap-1.5">
+          <StatusPill health={f.health} />
+          <DeleteFeatureButton
+            feature={f.feature}
+            displayName={f.display_name}
+            runCount={f.run_count}
+          />
+        </div>
       </div>
 
       <div className="mt-5 flex items-end justify-between gap-4">
@@ -135,11 +162,16 @@ function FeatureCard({ f }: { f: FeatureOverview }) {
             )}
           </div>
           <p className="mt-1 text-[12px] text-mute">
-            {f.has_baseline ? `vs baseline ${pct(f.baseline_pass_rate, 0)}` : "no baseline yet"}
+            {f.has_baseline
+              ? `vs baseline ${pct(f.baseline_pass_rate, 0)}`
+              : "no baseline yet"}
           </p>
         </div>
         <div className="opacity-90">
-          <Sparkline values={f.sparkline.map((p) => p.pass_rate)} health={f.health} />
+          <Sparkline
+            values={f.sparkline.map((p) => p.pass_rate)}
+            health={f.health}
+          />
         </div>
       </div>
 
@@ -154,7 +186,11 @@ function FeatureCard({ f }: { f: FeatureOverview }) {
           )}
         </div>
         <span className="flex items-center gap-1 text-[13px] text-mute transition-colors group-hover:text-signal">
-          Open <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+          Open{" "}
+          <ArrowRight
+            size={14}
+            className="transition-transform group-hover:translate-x-0.5"
+          />
         </span>
       </div>
     </Link>
@@ -167,10 +203,12 @@ function EmptyFleet() {
       <span className="grid h-12 w-12 place-items-center rounded-xl bg-signal/12 ring-1 ring-signal/25">
         <Sparkles size={20} className="text-signal" />
       </span>
-      <h3 className="mt-5 font-display text-2xl text-bright">No features under test yet</h3>
+      <h3 className="mt-5 font-display text-2xl text-bright">
+        No features under test yet
+      </h3>
       <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-dim">
-        Onboard your first AI feature from a labeled dataset — EvalGate infers the schema,
-        scaffolds a prompt, and runs the first evaluation.
+        Onboard your first AI feature from a labeled dataset — EvalGate infers
+        the schema, scaffolds a prompt, and runs the first evaluation.
       </p>
       <Button asChild variant="signal" className="mt-6">
         <Link href="/create">
