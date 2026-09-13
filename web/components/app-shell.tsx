@@ -39,7 +39,7 @@ export function AppShell({ fleet, children }: { fleet: FleetItem[]; children: Re
         </Link>
 
         <nav className="space-y-1">
-          <NavItem href="/" icon={<Radar size={16} />} label="Mission Control" active={onHome} />
+          <NavItem href="/" icon={<Radar size={16} />} label="Home" active={onHome} />
           <NavItem href="/create" icon={<Plus size={16} />} label="Create feature" active={onCreate} />
         </nav>
 

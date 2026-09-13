@@ -29,7 +29,7 @@ export default async function MissionControl() {
           <div>
             <p className="kicker">AI Evaluation Operating System</p>
             <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-tight text-bright md:text-6xl">
-              Mission Control
+              EvalGate
             </h1>
             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-dim">
               The health, quality, and evolution of every AI feature you ship —
