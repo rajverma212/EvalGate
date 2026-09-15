@@ -23,7 +23,7 @@ export default function NotFound() {
         href="/"
         className="mt-6 inline-flex items-center gap-2 rounded-full border border-line-2 bg-surface-2 px-5 py-2.5 text-[13px] font-medium text-bright transition-colors hover:border-signal/50"
       >
-        <ArrowLeft size={14} /> Back to Mission Control
+        <ArrowLeft size={14} /> Back to EvalGate
       </Link>
     </div>
   );

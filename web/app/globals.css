@@ -228,3 +228,12 @@
 @utility animate-breathe {
   animation: breathe 2.4s ease-in-out infinite;
 }
+
+/* Horizontal chip strips (the mobile fleet bar) scroll but should not show a bar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

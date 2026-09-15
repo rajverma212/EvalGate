@@ -251,7 +251,7 @@ export function CreateWizard() {
                 <p className="mt-1.5 text-[13px] leading-relaxed text-dim">
                   Activation writes the feature bundle into the platform, registers it, runs its first
                   evaluation, and promotes the result as a baseline — after which{" "}
-                  <span className="text-text">{slug}</span> appears in Mission Control. This calls the
+                  <span className="text-text">{slug}</span> appears on the home page. This calls the
                   model, so it can take a moment.
                 </p>
               </div>
@@ -281,7 +281,7 @@ export function CreateWizard() {
               <CircleCheck className="mt-0.5 shrink-0 text-healthy" size={22} />
               <div>
                 <p className="text-[15px] font-medium text-bright">
-                  {activated.feature} is live in Mission Control.
+                  {activated.feature} is live in EvalGate.
                 </p>
                 <p className="mt-1.5 text-[13px] leading-relaxed text-dim">
                   First evaluation complete and promoted as the baseline.
@@ -302,7 +302,7 @@ export function CreateWizard() {
               </Button>
               <Button asChild variant="ghost">
                 <Link href="/">
-                  <ArrowLeft size={15} /> Mission Control
+                  <ArrowLeft size={15} /> Home
                 </Link>
               </Button>
             </div>

@@ -12,6 +12,34 @@ interface FleetItem {
   health: string;
 }
 
+// The mobile bar shares its row with the fleet chips, so the verdict is abbreviated
+// there — the full sentence only has room in the desktop sidebar footer.
+const gateChipLabel = (gate: string): string => {
+  switch (gate) {
+    case "critical":
+      return "Gate blocking";
+    case "warning":
+      return "Gate warnings";
+    case "healthy":
+      return "Gate open";
+    default:
+      return "Gate idle";
+  }
+};
+
+const gateLabel = (gate: string): string => {
+  switch (gate) {
+    case "critical":
+      return "Blocking — critical regression";
+    case "warning":
+      return "Open — warnings present";
+    case "healthy":
+      return "Open — all green";
+    default:
+      return "Idle";
+  }
+};
+
 const worstHealth = (items: FleetItem[]): string => {
   if (items.some((i) => i.health === "critical")) return "critical";
   if (items.some((i) => i.health === "warning")) return "warning";
@@ -80,21 +108,96 @@ export function AppShell({ fleet, children }: { fleet: FleetItem[]; children: Re
           </div>
           <div className="mt-2 flex items-center gap-2">
             <HealthDot health={gate} />
-            <span className="text-[13px] text-text">
-              {gate === "critical"
-                ? "Blocking — critical regression"
-                : gate === "warning"
-                  ? "Open — warnings present"
-                  : gate === "healthy"
-                    ? "Open — all green"
-                    : "Idle"}
-            </span>
+            <span className="text-[13px] text-text">{gateLabel(gate)}</span>
           </div>
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile bar. The sidebar above is `md:`-only, so without this the app has no
+            navigation and never says its own name on a phone — the surface a link
+            shared with someone else is most likely to be opened on. */}
+        <header className="sticky top-0 z-40 border-b border-line bg-ink/80 backdrop-blur-xl md:hidden">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <Link href="/" className="flex items-center gap-2">
+              <span className="relative grid h-6 w-6 place-items-center rounded-md bg-signal/15 ring-1 ring-signal/30">
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-signal animate-breathe"
+                  style={{ boxShadow: "0 0 8px var(--signal)" }}
+                />
+              </span>
+              <span className="font-display text-[17px] leading-none text-bright">
+                Eval<span className="text-signal">·</span>Gate
+              </span>
+            </Link>
+            <nav className="ml-auto flex items-center gap-1.5">
+              <MobileNavItem href="/" icon={<Radar size={15} />} label="Home" active={onHome} />
+              <MobileNavItem
+                href="/create"
+                icon={<Plus size={15} />}
+                label="Create"
+                active={onCreate}
+              />
+            </nav>
+          </div>
+
+          {/* The fleet, plus the gate verdict that is the point of the product. */}
+          <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-4 pb-2.5">
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface/50 px-2.5 py-1">
+              <HealthDot health={gate} />
+              <span className="kicker whitespace-nowrap">{gateChipLabel(gate)}</span>
+            </span>
+            {fleet.map((f) => {
+              const active = pathname.startsWith(`/features/${f.feature}`);
+              return (
+                <Link
+                  key={f.feature}
+                  href={`/features/${f.feature}`}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors",
+                    active
+                      ? "border-signal/30 bg-signal/12 text-bright"
+                      : "border-line bg-surface/40 text-dim",
+                  )}
+                >
+                  <HealthDot health={f.health} />
+                  <span className="whitespace-nowrap">{f.display_name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </header>
+
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
     </div>
+  );
+}
+
+function MobileNavItem({
+  href,
+  icon,
+  label,
+  active,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+        active
+          ? "bg-signal/12 text-bright ring-1 ring-inset ring-signal/25"
+          : "text-dim hover:bg-surface/60",
+      )}
+    >
+      <span className={cn(active ? "text-signal" : "text-mute")}>{icon}</span>
+      {label}
+    </Link>
   );
 }
 

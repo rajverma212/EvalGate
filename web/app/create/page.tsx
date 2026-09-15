@@ -13,7 +13,7 @@ export default function CreatePage() {
           href="/"
           className="inline-flex items-center gap-1.5 text-[12.5px] text-mute transition-colors hover:text-dim"
         >
-          <ArrowLeft size={13} /> Mission Control
+          <ArrowLeft size={13} /> EvalGate
         </Link>
         <p className="kicker mt-4">Onboard a feature</p>
         <h1 className="mt-2 font-display text-4xl tracking-tight text-bright md:text-5xl">

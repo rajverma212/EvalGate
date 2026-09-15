@@ -25,7 +25,7 @@ export default async function FeatureLayout({
           href="/"
           className="inline-flex items-center gap-1.5 text-[12.5px] text-mute transition-colors hover:text-dim"
         >
-          <ArrowLeft size={13} /> Mission Control
+          <ArrowLeft size={13} /> EvalGate
         </Link>
 
         <div className="mt-3 flex flex-wrap items-end justify-between gap-5">
