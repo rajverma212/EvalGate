@@ -90,9 +90,11 @@ and validators for non-empty text.
 from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+
 class MyCategory(StrEnum):
     A = "a"
     B = "b"
+
 
 class MyInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -104,6 +106,7 @@ class MyInput(BaseModel):
         if not v.strip():
             raise ValueError("text must not be blank")
         return v
+
 
 class MyOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")

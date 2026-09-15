@@ -1,7 +1,7 @@
 name: CI
 
 # Fast, secret-free checks on every push to main and every pull request:
-# lint, format, and the unit/integration test suite (OpenAI is mocked in tests).
+# lint, format, and the unit/integration test suite (Anthropic is mocked in tests).
 
 on:
   push:

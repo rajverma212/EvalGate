@@ -21,9 +21,12 @@ on:
       - "src/mrds/features/**"
       - "config/**"
   workflow_dispatch: {}
-  schedule:
-    # Nightly full run (no --max-cases) to catch drift on the complete dataset.
-    - cron: "0 6 * * *"
+  # The nightly full run is paused: it calls the live Anthropic API on every fire,
+  # so it bills unattended. Re-enable when a budget for continuous drift detection
+  # exists; until then the gate runs on demand and on PRs that touch the artifacts
+  # it guards.
+  # schedule:
+  #   - cron: "0 6 * * *"
 
 permissions:
   contents: read
@@ -55,7 +58,9 @@ jobs:
           cache: pip
 
       - name: Install package
-        run: pip install -e ".[dev]"
+        # The `api` extra is required: tests/unit/test_api.py imports FastAPI, and
+        # without it collection fails and this job dies before reaching the gate.
+        run: pip install -e ".[dev,api]"
 
       - name: Run tests
         run: pytest -q

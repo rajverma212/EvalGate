@@ -32,7 +32,9 @@ dev = [
     # CLAUDE.md sets a ~90% coverage target on core/eval/regression/db; without this the
     # target is unmeasurable, so it ships with the dev extra rather than as a local habit.
     "pytest-cov>=5.0",
-    "ruff>=0.4",
+    # Pinned to a minor: Ruff's formatter is version-sensitive (0.16 began formatting
+    # Python blocks inside Markdown), so an open range silently diverges from CI.
+    "ruff>=0.16.7,<0.17",
     # Installed in dev so the libSQL backend's parity tests actually run.
     "libsql>=0.1",
 ]
