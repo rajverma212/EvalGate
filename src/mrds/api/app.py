@@ -341,6 +341,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - a flat list of thin 
             # A run cannot meaningfully sit above or below itself.
             baseline_pass_rate=None if is_baseline else data.baseline_pass_rate(feature),
             comparison=comparison,
+            latest_is_baseline=is_baseline,
         )
         return serialize_feature_summary(summary)
 

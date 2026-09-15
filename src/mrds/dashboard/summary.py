@@ -129,7 +129,21 @@ def _errors_point(metrics: AggregateMetrics) -> SummaryPoint | None:
     )
 
 
-def _baseline_point(metrics: AggregateMetrics, baseline_pass_rate: float | None) -> SummaryPoint:
+def _baseline_point(
+    metrics: AggregateMetrics, baseline_pass_rate: float | None, latest_is_baseline: bool
+) -> SummaryPoint:
+    # A newly created feature is in this state: activation promotes its first run, so the
+    # feature *has* a baseline — it just happens to be this run. Saying "no baseline yet"
+    # here would be wrong, and telling the reader to promote one would be busywork.
+    if latest_is_baseline:
+        return SummaryPoint(
+            label="Baseline",
+            text=(
+                "This run is the baseline — the benchmark every future run is measured "
+                "against. There is nothing to compare it to yet, because it is the only run."
+            ),
+            tone="neutral",
+        )
     if baseline_pass_rate is None:
         return SummaryPoint(
             label="Baseline",
@@ -225,7 +239,13 @@ def _segment_point(metrics: AggregateMetrics) -> SummaryPoint | None:
     )
 
 
-def _gate_text(comparison: RegressionResult | None, baseline_pass_rate: float | None) -> str:
+def _gate_text(
+    comparison: RegressionResult | None,
+    baseline_pass_rate: float | None,
+    latest_is_baseline: bool,
+) -> str:
+    if latest_is_baseline:
+        return "This run is the baseline — future runs are gated against it."
     if baseline_pass_rate is None:
         return "No baseline yet — nothing to gate against."
     if comparison is None:
@@ -235,13 +255,20 @@ def _gate_text(comparison: RegressionResult | None, baseline_pass_rate: float | 
     return "A merge with this run would pass the gate."
 
 
-def _headline(status: str, metrics: AggregateMetrics, baseline_pass_rate: float | None) -> str:
+def _headline(
+    status: str,
+    metrics: AggregateMetrics,
+    baseline_pass_rate: float | None,
+    latest_is_baseline: bool,
+) -> str:
     if metrics.errored == metrics.total_cases and metrics.total_cases:
         return "Every case errored — this run never really executed."
     if status == "critical":
         return "Quality has dropped badly enough to block a merge."
     if status == "warning":
         return "Quality slipped, but not far enough to block a merge."
+    if latest_is_baseline:
+        return "Set as the baseline. Run it again after a change to see what moves."
     if baseline_pass_rate is None:
         return "Looking healthy — but there is no baseline yet to judge it against."
     if metrics.pass_rate >= baseline_pass_rate:
@@ -255,6 +282,7 @@ def _what_to_do(
     baseline_pass_rate: float | None,
     comparison: RegressionResult | None,
     segment: SummaryPoint | None,
+    latest_is_baseline: bool,
 ) -> str | None:
     if comparison is not None and comparison.is_blocking:
         return (
@@ -269,6 +297,12 @@ def _what_to_do(
         )
     if segment is not None:
         return "Focus on the weak spot above; it is where the most failures are concentrated."
+    if latest_is_baseline:
+        return (
+            "Evaluate this feature again after you change its prompt, model, or dataset. A "
+            "second run is what gives the platform something to compare — with only one run "
+            "there is no trend, no comparison, and nothing that can be caught as a regression."
+        )
     if baseline_pass_rate is None:
         return (
             "Promote this run as the baseline. Nothing can be detected as a regression until "
@@ -287,6 +321,7 @@ def build_feature_summary(
     trend: Sequence[TrendPoint],
     baseline_pass_rate: float | None,
     comparison: RegressionResult | None,
+    latest_is_baseline: bool = False,
 ) -> FeatureSummary:
     """Reduce a feature's whole data picture to something a non-specialist can act on.
 
@@ -299,6 +334,10 @@ def build_feature_summary(
             if the latest run *is* the baseline.
         comparison: The latest run compared against the baseline, or ``None`` when there is
             no baseline to compare with (or the run is itself the baseline).
+        latest_is_baseline: Whether the latest run *is* the active baseline. Distinguishes a
+            newly created feature — which has a baseline, namely its only run — from one
+            that has no baseline at all. Without it both look like ``baseline_pass_rate is
+            None`` and the summary tells the reader to promote a baseline they already have.
 
     Returns:
         A :class:`FeatureSummary`. Pure: no I/O, no database access.
@@ -306,7 +345,7 @@ def build_feature_summary(
     segment = _segment_point(metrics)
     candidates = [
         _latest_point(metrics),
-        _baseline_point(metrics, baseline_pass_rate),
+        _baseline_point(metrics, baseline_pass_rate, latest_is_baseline),
         _trend_point(trend),
         _regressions_point(comparison),
         segment,
@@ -314,9 +353,11 @@ def build_feature_summary(
     ]
     return FeatureSummary(
         feature=feature,
-        headline=_headline(status, metrics, baseline_pass_rate),
+        headline=_headline(status, metrics, baseline_pass_rate, latest_is_baseline),
         status=status,
-        gate=_gate_text(comparison, baseline_pass_rate),
+        gate=_gate_text(comparison, baseline_pass_rate, latest_is_baseline),
         points=[p for p in candidates if p is not None],
-        what_to_do=_what_to_do(status, metrics, baseline_pass_rate, comparison, segment),
+        what_to_do=_what_to_do(
+            status, metrics, baseline_pass_rate, comparison, segment, latest_is_baseline
+        ),
     )

@@ -127,6 +127,7 @@ def _summary(**kw):
         trend=_trend(0.9, 0.9),
         baseline_pass_rate=0.9,
         comparison=None,
+        latest_is_baseline=False,
     )
     return build_feature_summary(**{**defaults, **kw})
 
@@ -260,3 +261,30 @@ def test_a_segment_that_fails_everything_is_described_in_words() -> None:
     weak = _text(s, "Weak spot")
     assert "fails every one of its 8 cases" in weak
     assert "passes only 0%" not in weak
+
+
+def test_a_brand_new_feature_is_not_told_to_promote_a_baseline_it_already_has() -> None:
+    """Activation promotes a feature's first run as its baseline, so a one-run feature
+    *has* a baseline — itself. Reporting "no baseline yet" there, and advising the reader
+    to promote one, is both wrong and busywork."""
+    s = _summary(
+        metrics=_metrics(total=20, passed=19, failed=1),
+        trend=_trend(0.95),
+        baseline_pass_rate=None,
+        comparison=None,
+        latest_is_baseline=True,
+    )
+    baseline = _text(s, "Baseline")
+    assert "This run is the baseline" in baseline
+    assert "No baseline has been promoted" not in baseline
+    assert s.gate == "This run is the baseline — future runs are gated against it."
+    assert s.headline == "Set as the baseline. Run it again after a change to see what moves."
+    assert s.what_to_do is not None
+    assert "Evaluate this feature again" in s.what_to_do
+    assert "Promote this run as the baseline" not in s.what_to_do
+
+
+def test_a_feature_with_genuinely_no_baseline_still_says_so() -> None:
+    s = _summary(baseline_pass_rate=None, latest_is_baseline=False)
+    assert "No baseline has been promoted yet" in _text(s, "Baseline")
+    assert s.what_to_do is not None and "Promote this run as the baseline" in s.what_to_do
