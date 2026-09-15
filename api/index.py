@@ -52,10 +52,15 @@ if _TURSO:
     try:
         from mrds.db import EvaluationStore, get_backend
         from mrds.demo import seed_demo
+        from mrds.demo.review_sentiment import seed_review_sentiment
 
         _db = get_backend().connect(check_same_thread=False)
         try:
-            seed_demo(EvaluationStore(_db))
+            _store = EvaluationStore(_db)
+            seed_demo(_store)
+            # Independently idempotent: seed_demo returns early once the database holds
+            # any run, so a primary seeded before this feature existed still gains it.
+            seed_review_sentiment(_store)
         finally:
             _db.close()
     except Exception:  # noqa: BLE001 - cold-start seeding is best-effort by design

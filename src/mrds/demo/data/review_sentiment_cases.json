@@ -1,0 +1,175 @@
+{
+  "version": "v1",
+  "created_at": "2026-09-15",
+  "description": "Golden dataset for product-review triage: the sentiment a review carries and the topic it is about. Six cases per topic, spanning clear-cut and genuinely mixed language.",
+  "cases": [
+    {
+      "id": "rs-001",
+      "input": { "review_text": "Ordered Tuesday, arrived Thursday morning. Two days door to door is genuinely impressive." },
+      "expected_output": { "sentiment": "positive", "topic": "shipping" },
+      "expected_difficulty": "easy",
+      "notes": "Unambiguous praise for delivery speed."
+    },
+    {
+      "id": "rs-002",
+      "input": { "review_text": "Package showed up nine days late and the tracking page never updated once." },
+      "expected_output": { "sentiment": "negative", "topic": "shipping" },
+      "expected_difficulty": "easy",
+      "notes": "Clear delivery failure."
+    },
+    {
+      "id": "rs-003",
+      "input": { "review_text": "Delivery was on the estimated date. Box was a little dented but nothing inside was damaged." },
+      "expected_output": { "sentiment": "neutral", "topic": "shipping" },
+      "expected_difficulty": "medium",
+      "notes": "Minor complaint that does not tip the overall sentiment negative."
+    },
+    {
+      "id": "rs-004",
+      "input": { "review_text": "Courier left it in pouring rain on the porch instead of the covered step I asked for." },
+      "expected_output": { "sentiment": "negative", "topic": "shipping" },
+      "expected_difficulty": "easy",
+      "notes": "Handling complaint — still a shipping issue, not product quality."
+    },
+    {
+      "id": "rs-005",
+      "input": { "review_text": "Shipping cost more than I expected but it did get here in under 48 hours." },
+      "expected_output": { "sentiment": "neutral", "topic": "shipping" },
+      "expected_difficulty": "hard",
+      "notes": "Mentions cost, but the subject is the shipment — topic must stay shipping."
+    },
+    {
+      "id": "rs-006",
+      "input": { "review_text": "Third order in a row that arrived exactly when the app said it would. Reliable." },
+      "expected_output": { "sentiment": "positive", "topic": "shipping" },
+      "expected_difficulty": "easy",
+      "notes": "Repeat-purchase praise for delivery reliability."
+    },
+    {
+      "id": "rs-007",
+      "input": { "review_text": "The stitching came apart at the seam after two washes. Feels cheaply made." },
+      "expected_output": { "sentiment": "negative", "topic": "quality" },
+      "expected_difficulty": "easy",
+      "notes": "Build-quality failure."
+    },
+    {
+      "id": "rs-008",
+      "input": { "review_text": "Solid metal body, no flex at all, and the finish still looks new after six months." },
+      "expected_output": { "sentiment": "positive", "topic": "quality" },
+      "expected_difficulty": "easy",
+      "notes": "Durability praise."
+    },
+    {
+      "id": "rs-009",
+      "input": { "review_text": "Material is about what you would expect at this tier. Not premium, not bad." },
+      "expected_output": { "sentiment": "neutral", "topic": "quality" },
+      "expected_difficulty": "medium",
+      "notes": "Explicitly middling — a real neutral, not a hedged negative."
+    },
+    {
+      "id": "rs-010",
+      "input": { "review_text": "Mine arrived with a hairline crack in the casing, though the replacement has been flawless." },
+      "expected_output": { "sentiment": "neutral", "topic": "quality" },
+      "expected_difficulty": "hard",
+      "notes": "Defect plus recovery — mixed language that models often over-call as negative."
+    },
+    {
+      "id": "rs-011",
+      "input": { "review_text": "Buttons started sticking within a month. Second unit with the same fault." },
+      "expected_output": { "sentiment": "negative", "topic": "quality" },
+      "expected_difficulty": "easy",
+      "notes": "Repeat defect."
+    },
+    {
+      "id": "rs-012",
+      "input": { "review_text": "Heavier and better finished than anything else I tried in this bracket." },
+      "expected_output": { "sentiment": "positive", "topic": "quality" },
+      "expected_difficulty": "medium",
+      "notes": "Comparative praise about construction."
+    },
+    {
+      "id": "rs-013",
+      "input": { "review_text": "Forty dollars for what is essentially a plastic bracket. Hard to justify." },
+      "expected_output": { "sentiment": "negative", "topic": "price" },
+      "expected_difficulty": "easy",
+      "notes": "Value complaint."
+    },
+    {
+      "id": "rs-014",
+      "input": { "review_text": "Caught it during the sale and at that price it is honestly a steal." },
+      "expected_output": { "sentiment": "positive", "topic": "price" },
+      "expected_difficulty": "easy",
+      "notes": "Clear value praise."
+    },
+    {
+      "id": "rs-015",
+      "input": { "review_text": "Costs about the same as the competing model. Nothing remarkable either way." },
+      "expected_output": { "sentiment": "neutral", "topic": "price" },
+      "expected_difficulty": "medium",
+      "notes": "Flat price comparison."
+    },
+    {
+      "id": "rs-016",
+      "input": { "review_text": "Went up thirty percent since last year with no visible change to the product." },
+      "expected_output": { "sentiment": "negative", "topic": "price" },
+      "expected_difficulty": "medium",
+      "notes": "Price-increase complaint."
+    },
+    {
+      "id": "rs-017",
+      "input": { "review_text": "Built well enough that the premium over the budget option felt worth paying." },
+      "expected_output": { "sentiment": "positive", "topic": "price" },
+      "expected_difficulty": "hard",
+      "notes": "Mentions build quality but the judgement is about worth — topic is price."
+    },
+    {
+      "id": "rs-018",
+      "input": { "review_text": "The subscription renews at full price with no loyalty discount whatsoever." },
+      "expected_output": { "sentiment": "negative", "topic": "price" },
+      "expected_difficulty": "medium",
+      "notes": "Pricing-policy complaint."
+    },
+    {
+      "id": "rs-019",
+      "input": { "review_text": "Support replied in under an hour and had a replacement out the same day." },
+      "expected_output": { "sentiment": "positive", "topic": "support" },
+      "expected_difficulty": "easy",
+      "notes": "Clear service praise."
+    },
+    {
+      "id": "rs-020",
+      "input": { "review_text": "Four emails over two weeks and I still do not have an answer about my warranty." },
+      "expected_output": { "sentiment": "negative", "topic": "support" },
+      "expected_difficulty": "easy",
+      "notes": "Unresolved service failure."
+    },
+    {
+      "id": "rs-021",
+      "input": { "review_text": "Chat agent was polite and followed the script, but could not actually change my order." },
+      "expected_output": { "sentiment": "neutral", "topic": "support" },
+      "expected_difficulty": "hard",
+      "notes": "Positive manner, unhelpful outcome — nets out neutral."
+    },
+    {
+      "id": "rs-022",
+      "input": { "review_text": "Phone line disconnected me twice before I reached anyone who could help." },
+      "expected_output": { "sentiment": "negative", "topic": "support" },
+      "expected_difficulty": "medium",
+      "notes": "Access-to-support complaint."
+    },
+    {
+      "id": "rs-023",
+      "input": { "review_text": "The help centre article answered it in one page, so I never needed to contact anyone." },
+      "expected_output": { "sentiment": "positive", "topic": "support" },
+      "expected_difficulty": "hard",
+      "notes": "Self-service success still belongs to the support topic."
+    },
+    {
+      "id": "rs-024",
+      "input": { "review_text": "Standard returns process. Took the usual week to clear, no surprises." },
+      "expected_output": { "sentiment": "neutral", "topic": "support" },
+      "expected_difficulty": "medium",
+      "notes": "Routine service experience."
+    }
+  ]
+}
