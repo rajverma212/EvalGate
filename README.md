@@ -24,6 +24,10 @@
 
 <p align="center"><sub><b>Every AI feature you ship, with its verdict.</b> Pass rate against a trusted baseline, trend, and whether the deploy gate is open or blocking.</sub></p>
 
+![A feature that passes its gate — 96%, four points above baseline](docs/images/run-analysis.png)
+
+<p align="center"><sub><b>And what passing looks like.</b> The same screen for a feature that regressed, was fixed, and now clears the baseline its repair was promoted to — the gate is open.</sub></p>
+
 ![Root-cause analysis — the exact cases behind a regressed metric](docs/images/regressions.png)
 
 <p align="center"><sub><b>A number dropped — here is what the model got wrong.</b> Every regressed metric traces to the individual cases that caused it, with the expected and actual output side by side.</sub></p>
