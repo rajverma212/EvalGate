@@ -20,6 +20,16 @@
 
 ---
 
+![EvalGate — fleet health across every AI feature under test](docs/images/home.png)
+
+<p align="center"><sub><b>Every AI feature you ship, with its verdict.</b> Pass rate against a trusted baseline, trend, and whether the deploy gate is open or blocking.</sub></p>
+
+![Root-cause analysis — the exact cases behind a regressed metric](docs/images/regressions.png)
+
+<p align="center"><sub><b>A number dropped — here is what the model got wrong.</b> Every regressed metric traces to the individual cases that caused it, with the expected and actual output side by side.</sub></p>
+
+---
+
 ## 1. Project Overview
 
 Most software has a safety net: write code, run tests, and CI refuses to merge anything that breaks them. **AI features have no such net by default.** A reworded prompt, a model upgrade, or a new training example can quietly make an LLM feature *worse* — and nobody notices until customers do.
