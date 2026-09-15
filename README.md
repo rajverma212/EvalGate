@@ -30,6 +30,21 @@
 
 ---
 
+### What the live demo shows
+
+Three features are under test, chosen so the fleet shows both verdicts the gate can reach:
+
+| Feature | State | What it demonstrates |
+|---|---|---|
+| **Email Classifier** | 🔴 Critical | A prompt change that cost 20 points of pass rate. The gate is closed — this merge is blocked. |
+| **Ticket Router** | 🔴 Critical | A 30-point drop traced to two specific categories, with the exact misrouted tickets listed. |
+| **Review Sentiment** | 🟢 Healthy | The other half of the story: regressed, was caught, was fixed, and the repair was promoted. Now 4 points *above* its baseline — the gate is open. |
+
+Every number is produced by the real engine against a versioned golden dataset. The demo data is
+seeded deterministically offline (no model calls), so the narrative is identical on every machine.
+
+---
+
 ## 1. Project Overview
 
 Most software has a safety net: write code, run tests, and CI refuses to merge anything that breaks them. **AI features have no such net by default.** A reworded prompt, a model upgrade, or a new training example can quietly make an LLM feature *worse* — and nobody notices until customers do.
@@ -347,7 +362,7 @@ The hosted dashboard runs in **demo mode** — deterministic, offline-seeded dat
 
 The platform is built to extend without touching its core. Natural next steps:
 
-- **More features under test** — `rag_qa`, `chatbot`, `ticket_router`. Each is a self-contained plug-in; the evaluation core stays untouched.
+- **More features under test** — `rag_qa`, `chatbot`. Each is a self-contained plug-in; the evaluation core stays untouched. (`ticket_router` and `review_sentiment` have since landed — the latter without a line of feature code, as a spec persisted in the database.)
 - **Optional eval-framework adapters** — integrate DeepEval / RAGAS *behind* the existing scorer-adapter seam, without coupling the core to them.
 - **Richer LLM-as-judge scoring** — expand judge-based scorers for open-ended outputs (kept off by default in CI for cost control).
 - **Containerized deployment** — a Docker image and compose file for one-command, reproducible hosting of the CLI and dashboard.
