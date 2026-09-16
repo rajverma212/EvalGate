@@ -73,3 +73,20 @@ def test_feature_is_spec_driven_and_segmented(store: EvaluationStore) -> None:
     assert persisted is not None
     assert persisted.segment_field == "topic"
     assert SPEC.segment_field == "topic"
+
+
+def test_seeded_demo_flag_marks_offline_data_and_clears_on_a_real_run(
+    store: EvaluationStore,
+) -> None:
+    """The 'sample data' label must be earned, and must stop being shown when untrue."""
+    from mrds.dashboard.data import DashboardData
+
+    seed_review_sentiment(store)
+    data = DashboardData(store)
+    assert data.feature_overview(FEATURE_NAME).seeded_demo is True
+
+    # One run from any other source (a real evaluation, CI, the web Create flow) and the
+    # feature is no longer purely seeded — the tag must disappear on its own.
+    latest = store.get_evaluation_result(store.latest_run_uuid(FEATURE_NAME))
+    store.save_evaluation(latest.model_copy(update={"run_id": "realrun0000"}), triggered_by="local")
+    assert data.feature_overview(FEATURE_NAME).seeded_demo is False

@@ -40,6 +40,14 @@ export default async function FeatureLayout({
               {overview.segment_field && <Tag>segmented by {overview.segment_field}</Tag>}
               <Tag>{overview.run_count} runs</Tag>
               <Tag className="font-mono">{feature}</Tag>
+              {overview.seeded_demo && (
+                <Tag
+                  className="border-dashed text-mute"
+                  title="Seeded offline by the demo seeder: the real evaluation engine, with a deterministic stand-in for the model. A feature evaluated for real loses this tag."
+                >
+                  sample data
+                </Tag>
+              )}
             </div>
           </div>
 

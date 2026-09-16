@@ -179,6 +179,14 @@ function FeatureCard({ f }: { f: FeatureOverview }) {
         <div className="flex flex-wrap items-center gap-2">
           <Tag>{f.run_count} runs</Tag>
           {f.segment_field && <Tag>by {f.segment_field}</Tag>}
+          {f.seeded_demo && (
+            <Tag
+              className="border-dashed text-mute"
+              title="Seeded offline by the demo seeder: the real evaluation engine, with a deterministic stand-in for the model. A feature evaluated for real loses this tag."
+            >
+              sample data
+            </Tag>
+          )}
           {f.runs_with_regressions > 0 && (
             <Tag className="border-critical/30 text-critical/90">
               {f.runs_with_regressions} flagged

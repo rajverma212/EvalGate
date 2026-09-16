@@ -31,6 +31,8 @@ export interface FeatureOverview {
   has_baseline: boolean;
   baseline_delta: number | null;
   runs_with_regressions: number;
+  /** Every run came from the offline demo seeder, not a real model call. */
+  seeded_demo: boolean;
   segment_field: string | null;
   sparkline: SparkPoint[];
 }

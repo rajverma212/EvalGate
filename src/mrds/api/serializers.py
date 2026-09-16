@@ -150,6 +150,7 @@ def serialize_overview(
         "has_baseline": baseline_pass_rate is not None,
         "baseline_delta": delta,
         "runs_with_regressions": overview.runs_with_regressions,
+        "seeded_demo": overview.seeded_demo,
         "segment_field": segment_field,
         "sparkline": sparkline,
     }

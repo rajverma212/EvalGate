@@ -59,9 +59,19 @@ export function StatusPill({
   );
 }
 
-export function Tag({ children, className }: { children: React.ReactNode; className?: string }) {
+export function Tag({
+  children,
+  className,
+  title,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  /** Hover text, for a tag whose meaning is not self-evident. */
+  title?: string;
+}) {
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-md border border-line bg-surface/50 px-2 py-0.5 font-mono text-[11px] text-dim",
         className,

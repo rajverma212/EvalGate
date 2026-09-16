@@ -110,6 +110,11 @@ class FeatureOverview:
     latest_pass_rate: float | None
     runs_with_regressions: int
     health: str  # "healthy" | "warning" | "critical" | "unknown"
+    # True when every run was produced by the offline demo seeder rather than by a real
+    # model call. Lets a surface say so plainly instead of presenting seeded numbers as
+    # production traffic — and it stops being true the moment the feature is evaluated
+    # for real, so nothing has to be un-labelled by hand.
+    seeded_demo: bool = False
 
 
 def _health_from_severities(severities: list[str]) -> str:
@@ -546,6 +551,7 @@ class DashboardData:
                 latest_pass_rate=None,
                 runs_with_regressions=0,
                 health="unknown",
+                seeded_demo=False,
             )
 
         latest = runs[0]
@@ -564,6 +570,7 @@ class DashboardData:
             latest_pass_rate=latest_pass_rate,
             runs_with_regressions=runs_with_regressions,
             health=latest_health,
+            seeded_demo=all(run.triggered_by == "demo" for run in runs),
         )
 
     def _dataset_version(self, dataset_version_id: int | None, cache: dict[int, str]) -> str:
